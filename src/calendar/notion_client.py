@@ -175,6 +175,114 @@ class NotionCalendarManager:
 
         return updated_page_ids
 
+    @with_retry
+    def query_tomorrow_deadlines(self) -> list[dict]:
+        """노션 DB에서 내일 마감인 공고를 조회한다.
+
+        Returns:
+            내일 마감 공고 페이지 목록.
+        """
+        from datetime import timedelta
+
+        tomorrow = (date.today() + timedelta(days=1)).isoformat()
+
+        response = self.client.databases.query(
+            database_id=self.database_id,
+            filter={
+                "and": [
+                    {"property": "마감일", "date": {"equals": tomorrow}},
+                    {"property": "상태", "select": {"does_not_equal": "마감"}},
+                ]
+            },
+        )
+
+        results = []
+        for page in response.get("results", []):
+            props = page.get("properties", {})
+            title_parts = props.get("공고명", {}).get("title", [])
+            title = title_parts[0]["plain_text"] if title_parts else "(제목 없음)"
+            end_date_prop = props.get("마감일", {}).get("date")
+            end_date_str = end_date_prop.get("start") if end_date_prop else None
+            url_prop = props.get("원문 링크", {}).get("url")
+
+            results.append({
+                "page_id": page["id"],
+                "title": title,
+                "end_date": end_date_str,
+                "url": url_prop,
+            })
+
+        logger.info("내일 마감 공고 조회: %d건", len(results))
+        return results
+
+    @with_retry
+    def query_expired_active(self) -> list[dict]:
+        """노션 DB에서 마감일 지났는데 '마감' 아닌 공고를 조회한다.
+
+        Returns:
+            상태 업데이트 필요한 페이지 목록.
+        """
+        today = date.today().isoformat()
+
+        response = self.client.databases.query(
+            database_id=self.database_id,
+            filter={
+                "and": [
+                    {"property": "마감일", "date": {"before": today}},
+                    {"property": "상태", "select": {"does_not_equal": "마감"}},
+                ]
+            },
+        )
+
+        results = [{"page_id": page["id"]} for page in response.get("results", [])]
+        logger.info("마감일 경과 미처리 공고: %d건", len(results))
+        return results
+
+    @with_retry
+    def query_weekly_deadlines(self) -> list[dict]:
+        """노션 DB에서 이번 주 마감 예정 공고를 조회한다.
+
+        Returns:
+            이번 주 마감 예정 공고 목록.
+        """
+        from datetime import timedelta
+
+        today = date.today()
+        monday = today - timedelta(days=today.weekday())
+        sunday = monday + timedelta(days=6)
+
+        response = self.client.databases.query(
+            database_id=self.database_id,
+            filter={
+                "and": [
+                    {"property": "마감일", "date": {"on_or_after": monday.isoformat()}},
+                    {"property": "마감일", "date": {"on_or_before": sunday.isoformat()}},
+                    {"property": "상태", "select": {"does_not_equal": "마감"}},
+                ]
+            },
+            sorts=[{"property": "마감일", "direction": "ascending"}],
+        )
+
+        results = []
+        for page in response.get("results", []):
+            props = page.get("properties", {})
+            title_parts = props.get("공고명", {}).get("title", [])
+            title = title_parts[0]["plain_text"] if title_parts else "(제목 없음)"
+            end_date_prop = props.get("마감일", {}).get("date")
+            end_date_str = end_date_prop.get("start") if end_date_prop else None
+            housing_type_prop = props.get("모집 유형", {}).get("select")
+            housing_type = housing_type_prop.get("name") if housing_type_prop else None
+
+            results.append({
+                "page_id": page["id"],
+                "title": title,
+                "end_date": end_date_str,
+                "housing_type": housing_type,
+            })
+
+        logger.info("이번 주 마감 예정 공고: %d건", len(results))
+        return results
+
     def _build_properties(
         self, announcement: Announcement, status: str
     ) -> dict[str, Any]:

@@ -259,137 +259,81 @@ class TestWeeklySummaryJob:
     """weekly_summary_job 작업 테스트."""
 
     @pytest.mark.asyncio
-    @patch("src.scheduler.jobs.get_session")
-    @patch("src.scheduler.jobs.WeeklySummaryGenerator")
     @patch("src.scheduler.jobs.create_notifier")
+    @patch("src.scheduler.jobs.NotionCalendarManager")
     async def test_weekly_summary_posts_message(
         self,
+        mock_calendar_cls: MagicMock,
         mock_create_notifier: MagicMock,
-        mock_generator_cls: MagicMock,
-        mock_get_session: MagicMock,
         mock_settings: Settings,
     ) -> None:
         """주간 요약이 정상적으로 포스팅되는지 확인한다."""
-        mock_session = MagicMock()
-        mock_get_session.return_value = mock_session
-
-        mock_generator = MagicMock()
-        mock_generator.get_weekly_announcements.return_value = []
-        mock_generator.format_weekly_summary.return_value = "📅 주간 요약 메시지"
-        mock_generator_cls.return_value = mock_generator
-
         mock_notifier = MagicMock()
         mock_notifier.send_channel_message = AsyncMock(return_value="msg-1")
         mock_notifier.send_admin_notification = AsyncMock()
         mock_create_notifier.return_value = mock_notifier
 
+        mock_calendar = MagicMock()
+        mock_calendar.query_weekly_deadlines.return_value = []
+        mock_calendar_cls.return_value = mock_calendar
+
         await weekly_summary_job(mock_settings)
 
-        mock_generator.get_weekly_announcements.assert_called_once()
-        mock_generator.format_weekly_summary.assert_called_once_with([])
-        mock_notifier.send_channel_message.assert_called_once_with("📅 주간 요약 메시지")
-        mock_session.close.assert_called_once()
+        mock_calendar.query_weekly_deadlines.assert_called_once()
+        mock_notifier.send_channel_message.assert_called_once()
 
 
 class TestReminderJob:
     """reminder_job 작업 테스트."""
 
     @pytest.mark.asyncio
-    @patch("src.scheduler.jobs.get_session")
-    @patch("src.scheduler.jobs.WeeklySummaryGenerator")
     @patch("src.scheduler.jobs.create_notifier")
     @patch("src.scheduler.jobs.NotionCalendarManager")
-    @patch("src.scheduler.jobs.AnnouncementRepository")
     async def test_reminder_job_posts_and_updates(
         self,
-        mock_repo_cls: MagicMock,
         mock_calendar_cls: MagicMock,
         mock_create_notifier: MagicMock,
-        mock_generator_cls: MagicMock,
-        mock_get_session: MagicMock,
         mock_settings: Settings,
     ) -> None:
         """리마인더가 포스팅되고 노션 상태가 업데이트되는지 확인한다."""
-        mock_session = MagicMock()
-        mock_get_session.return_value = mock_session
-
-        # 리마인더 대상 공고
-        mock_announcement = MagicMock()
-        mock_announcement.id = 1
-        mock_announcement.title = "테스트 공고"
-        mock_announcement.end_date = date.today() + timedelta(days=1)
-
-        mock_generator = MagicMock()
-        mock_generator.get_reminder_announcements.return_value = [mock_announcement]
-        mock_generator.format_reminder_batch.return_value = "⏰ 리마인더 메시지"
-        mock_generator_cls.return_value = mock_generator
-
         mock_notifier = MagicMock()
         mock_notifier.send_channel_message = AsyncMock(return_value="msg-1")
         mock_notifier.send_admin_notification = AsyncMock()
         mock_create_notifier.return_value = mock_notifier
 
         mock_calendar = MagicMock()
-        mock_calendar.close_expired.return_value = ["page-1"]
+        mock_calendar.query_tomorrow_deadlines.return_value = [
+            {"page_id": "p1", "title": "테스트 공고", "end_date": "2026-07-22", "url": "https://example.com"}
+        ]
+        mock_calendar.query_expired_active.return_value = [{"page_id": "p2"}]
+        mock_calendar.update_status.return_value = None
         mock_calendar_cls.return_value = mock_calendar
-
-        mock_repo = MagicMock()
-        mock_repo.get_active.return_value = [mock_announcement]
-        mock_repo.archive_expired.return_value = 0
-        mock_repo_cls.return_value = mock_repo
 
         await reminder_job(mock_settings)
 
-        # 리마인더 포스팅 확인
-        mock_notifier.send_channel_message.assert_called_once_with("⏰ 리마인더 메시지")
-        # 노션 상태 업데이트 확인
-        mock_calendar.close_expired.assert_called_once_with([mock_announcement])
-        # 아카이브 호출 확인
-        mock_repo.archive_expired.assert_called_once_with(days=90)
-        mock_session.commit.assert_called_once()
-        mock_session.close.assert_called_once()
+        mock_notifier.send_channel_message.assert_called_once()
+        mock_calendar.update_status.assert_called_once_with("p2", "마감")
 
     @pytest.mark.asyncio
-    @patch("src.scheduler.jobs.get_session")
-    @patch("src.scheduler.jobs.WeeklySummaryGenerator")
     @patch("src.scheduler.jobs.create_notifier")
     @patch("src.scheduler.jobs.NotionCalendarManager")
-    @patch("src.scheduler.jobs.AnnouncementRepository")
     async def test_reminder_job_no_reminders(
         self,
-        mock_repo_cls: MagicMock,
         mock_calendar_cls: MagicMock,
         mock_create_notifier: MagicMock,
-        mock_generator_cls: MagicMock,
-        mock_get_session: MagicMock,
         mock_settings: Settings,
     ) -> None:
         """리마인더 대상이 없을 때 포스팅을 건너뛰는지 확인한다."""
-        mock_session = MagicMock()
-        mock_get_session.return_value = mock_session
-
-        mock_generator = MagicMock()
-        mock_generator.get_reminder_announcements.return_value = []
-        mock_generator.format_reminder_batch.return_value = ""
-        mock_generator_cls.return_value = mock_generator
-
         mock_notifier = MagicMock()
         mock_notifier.send_channel_message = AsyncMock()
         mock_notifier.send_admin_notification = AsyncMock()
         mock_create_notifier.return_value = mock_notifier
 
         mock_calendar = MagicMock()
-        mock_calendar.close_expired.return_value = []
+        mock_calendar.query_tomorrow_deadlines.return_value = []
+        mock_calendar.query_expired_active.return_value = []
         mock_calendar_cls.return_value = mock_calendar
-
-        mock_repo = MagicMock()
-        mock_repo.get_active.return_value = []
-        mock_repo.archive_expired.return_value = 0
-        mock_repo_cls.return_value = mock_repo
 
         await reminder_job(mock_settings)
 
-        # 리마인더 메시지 전송 안 됨 (빈 문자열)
         mock_notifier.send_channel_message.assert_not_called()
-        mock_session.commit.assert_called_once()
-        mock_session.close.assert_called_once()

@@ -320,31 +320,26 @@ class TestSchedulerJobsAdminNotifications:
         assert mock_notifier.send_admin_notification.call_count == 4
 
     @pytest.mark.asyncio
-    @patch("src.scheduler.jobs.get_session")
-    @patch("src.scheduler.jobs.WeeklySummaryGenerator")
+    @patch("src.scheduler.jobs.NotionCalendarManager")
     @patch("src.scheduler.jobs.create_notifier")
     async def test_weekly_summary_failure_sends_admin_notification(
         self,
         mock_create_notifier: MagicMock,
-        mock_generator_cls: MagicMock,
-        mock_get_session: MagicMock,
+        mock_calendar_cls: MagicMock,
         mock_settings: Settings,
     ) -> None:
         """주간 요약 작업 실패 시 관리자에게 알림이 전송된다."""
         from src.scheduler.jobs import weekly_summary_job
-
-        mock_session = MagicMock()
-        mock_get_session.return_value = mock_session
 
         mock_notifier = MagicMock()
         mock_notifier.send_admin_notification = AsyncMock()
         mock_notifier.send_channel_message = AsyncMock()
         mock_create_notifier.return_value = mock_notifier
 
-        # WeeklySummaryGenerator에서 예외 발생
-        mock_generator_cls.side_effect = Exception("DB connection lost")
+        # NotionCalendarManager에서 예외 발생
+        mock_calendar_cls.side_effect = Exception("Notion API error")
 
-        with pytest.raises(Exception, match="DB connection lost"):
+        with pytest.raises(Exception, match="Notion API error"):
             await weekly_summary_job(mock_settings)
 
         # 관리자 알림 전송 확인
