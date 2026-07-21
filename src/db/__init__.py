@@ -4,7 +4,9 @@ SQLAlchemy 엔진과 세션 팩토리를 제공한다.
 """
 
 import logging
+import os
 from collections.abc import Generator
+from pathlib import Path
 
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
@@ -28,6 +30,13 @@ def init_db(database_url: str) -> Engine:
         생성된 SQLAlchemy Engine.
     """
     global _engine, _SessionFactory
+
+    # SQLite 파일 경로의 디렉토리가 없으면 생성
+    if database_url.startswith("sqlite:///"):
+        db_path = database_url.replace("sqlite:///", "")
+        db_dir = os.path.dirname(db_path)
+        if db_dir:
+            Path(db_dir).mkdir(parents=True, exist_ok=True)
 
     connect_args = {}
     if database_url.startswith("sqlite"):
