@@ -1,0 +1,34 @@
+name: 크롤링 + 포스팅
+
+on:
+  schedule:
+    # 평일(월~금) 오전 11시, 오후 5시 (KST) → UTC 02:00, 08:00
+    - cron: '0 2 * * 1-5'
+    - cron: '0 8 * * 1-5'
+  workflow_dispatch: # 수동 실행 가능
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -e .
+
+      - name: Run crawl + post
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
+          TELEGRAM_ADMIN_CHAT_ID: ${{ secrets.TELEGRAM_ADMIN_CHAT_ID }}
+          NOTION_ACCESS_TOKEN: ${{ secrets.NOTION_ACCESS_TOKEN }}
+          NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
+          NOTION_CALENDAR_SHARE_URL: ${{ secrets.NOTION_CALENDAR_SHARE_URL }}
+          DATABASE_URL: sqlite:///data/bot.db
+        run: python -m src.cli crawl
