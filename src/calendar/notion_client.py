@@ -186,8 +186,8 @@ class NotionCalendarManager:
 
         tomorrow = (date.today() + timedelta(days=1)).isoformat()
 
-        response = self.client.databases.query(
-            database_id=self.database_id,
+        response = self.client.data_sources.query(
+            data_source_id=self.database_id,
             filter={
                 "and": [
                     {"property": "마감일", "date": {"equals": tomorrow}},
@@ -224,8 +224,8 @@ class NotionCalendarManager:
         """
         today = date.today().isoformat()
 
-        response = self.client.databases.query(
-            database_id=self.database_id,
+        response = self.client.data_sources.query(
+            data_source_id=self.database_id,
             filter={
                 "and": [
                     {"property": "마감일", "date": {"before": today}},
@@ -251,8 +251,8 @@ class NotionCalendarManager:
         monday = today - timedelta(days=today.weekday())
         sunday = monday + timedelta(days=6)
 
-        response = self.client.databases.query(
-            database_id=self.database_id,
+        response = self.client.data_sources.query(
+            data_source_id=self.database_id,
             filter={
                 "and": [
                     {"property": "마감일", "date": {"on_or_after": monday.isoformat()}},
