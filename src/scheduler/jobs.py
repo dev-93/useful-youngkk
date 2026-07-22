@@ -59,7 +59,7 @@ async def crawl_and_post(settings: Settings) -> None:
 
         for crawler in crawlers:
             try:
-                crawl_log = run_with_retry(crawler, retry_interval=1800, max_retries=3)
+                crawl_log = run_with_retry(crawler, retry_interval=30, max_retries=2)
                 if crawl_log.status == "failed":
                     # 3회 재시도 모두 실패 → 관리자 알림
                     await notify_crawl_failure(
