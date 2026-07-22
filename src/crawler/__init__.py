@@ -9,7 +9,7 @@ from src.crawler.base import (
     ListItem,
     run_with_retry,
 )
-from src.crawler.applyhome_crawler import ApplyHomeCrawler
+from src.crawler.applyhome_crawler import ApplyHomeAPIClient
 from src.crawler.lh_crawler import LHCrawler
 from src.crawler.myhome_crawler import MyHomeCrawler
 from src.crawler.parser import EligibilityInfo, parse_date, parse_eligibility
@@ -17,7 +17,7 @@ from src.crawler.sh_crawler import SHCrawler
 
 __all__ = [
     "AnnouncementData",
-    "ApplyHomeCrawler",
+    "ApplyHomeAPIClient",
     "BaseCrawler",
     "EligibilityInfo",
     "LHCrawler",

@@ -12,7 +12,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from src.calendar.notion_client import NotionCalendarManager
-from src.crawler import ApplyHomeCrawler, LHCrawler, MyHomeCrawler, SHCrawler, run_with_retry
+from src.crawler import ApplyHomeAPIClient, LHCrawler, MyHomeCrawler, SHCrawler, run_with_retry
 from src.db import get_session
 from src.db.repository import AnnouncementRepository
 from src.notifier.admin import (
@@ -47,12 +47,11 @@ async def crawl_and_post(settings: Settings) -> None:
     notifier = create_notifier(settings)
 
     try:
-        # 크롤러 순차 실행
+        # 크롤러 순차 실행 (HTML 크롤링)
         crawlers = [
             SHCrawler(session),
             LHCrawler(session),
             MyHomeCrawler(session),
-            ApplyHomeCrawler(session),
         ]
 
         new_announcements = []
@@ -83,6 +82,39 @@ async def crawl_and_post(settings: Settings) -> None:
                     error=str(e),
                 )
                 continue
+
+        # 청약홈 API (민간분양) 수집
+        if settings.public_data_api_key:
+            try:
+                api_client = ApplyHomeAPIClient(api_key=settings.public_data_api_key)
+                api_announcements = api_client.fetch_recent_announcements(days_back=7)
+                repo = AnnouncementRepository(session)
+                for data in api_announcements:
+                    if not repo.exists(data.source_site, data.source_id):
+                        from src.db.models import Announcement
+
+                        ann = Announcement(
+                            source_site=data.source_site,
+                            source_id=data.source_id,
+                            title=data.title,
+                            announcement_category=data.announcement_category,
+                            housing_type=data.housing_type,
+                            start_date=data.start_date,
+                            end_date=data.end_date,
+                            result_date=data.result_date,
+                            target_region=data.target_region,
+                            eligibility_age=data.eligibility_age,
+                            eligibility_income=data.eligibility_income,
+                            eligibility_homeless=data.eligibility_homeless,
+                            eligibility_residence=data.eligibility_residence,
+                            original_url=data.original_url,
+                            status="active",
+                        )
+                        repo.create(ann)
+                        new_announcements.append(ann)
+                logger.info("[applyhome] API 수집 완료: 신규 %d건", len(api_announcements))
+            except Exception as e:
+                logger.error("[applyhome] API 수집 실패: %s", str(e))
 
         if not new_announcements:
             logger.info("새 공고 없음, 포스팅 건너뜀")

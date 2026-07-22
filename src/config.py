@@ -65,6 +65,7 @@ class Settings:
     database: DatabaseConfig
     scheduler: SchedulerConfig
     logging: LoggingConfig
+    public_data_api_key: str | None = None
 
 
 def _get_env(key: str, default: str | None = None) -> str:
@@ -103,6 +104,7 @@ def load_settings() -> Settings:
             level=_get_env("LOG_LEVEL", "INFO"),
             log_dir=_get_env("LOG_DIR", "./logs"),
         ),
+        public_data_api_key=os.environ.get("PUBLIC_DATA_API_KEY"),
     )
 
 
