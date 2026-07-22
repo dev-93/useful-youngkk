@@ -54,6 +54,18 @@ async def crawl_and_post(settings: Settings) -> None:
             MyHomeCrawler(session),
         ]
 
+        # 노션 DB에서 기존 공고 ID 가져오기 (중복 방지)
+        calendar_manager = NotionCalendarManager(
+            api_key=settings.notion.access_token,
+            database_id=settings.notion.database_id,
+            calendar_share_url=settings.notion.calendar_share_url,
+        )
+        try:
+            existing_ids = calendar_manager.get_existing_source_ids()
+        except Exception as e:
+            logger.warning("노션 기존 공고 조회 실패, 중복 체크 없이 진행: %s", str(e))
+            existing_ids = set()
+
         new_announcements = []
 
         for crawler in crawlers:
@@ -70,9 +82,10 @@ async def crawl_and_post(settings: Settings) -> None:
                     # 새로 수집된 공고 가져오기
                     repo = AnnouncementRepository(session)
                     active = repo.get_active()
-                    # 이번 크롤링에서 새로 추가된 공고 식별 (notion_page_id가 없는 것)
+                    # 노션에 이미 등록된 건 제외
                     for ann in active:
-                        if ann.notion_page_id is None and ann not in new_announcements:
+                        source_key = f"{ann.source_site}:{ann.source_id}"
+                        if source_key not in existing_ids and ann not in new_announcements:
                             new_announcements.append(ann)
             except Exception as e:
                 logger.error("[%s] 크롤링 실패: %s", crawler.source_site, str(e))
@@ -90,6 +103,9 @@ async def crawl_and_post(settings: Settings) -> None:
                 api_announcements = api_client.fetch_recent_announcements(days_back=7)
                 repo = AnnouncementRepository(session)
                 for data in api_announcements:
+                    source_key = f"{data.source_site}:{data.source_id}"
+                    if source_key in existing_ids:
+                        continue
                     if not repo.exists(data.source_site, data.source_id):
                         from src.db.models import Announcement
 
@@ -112,7 +128,7 @@ async def crawl_and_post(settings: Settings) -> None:
                         )
                         repo.create(ann)
                         new_announcements.append(ann)
-                logger.info("[applyhome] API 수집 완료: 신규 %d건", len(api_announcements))
+                logger.info("[applyhome] API 수집 완료: 신규 %d건", len([a for a in new_announcements if a.source_site == "applyhome"]))
             except Exception as e:
                 logger.error("[applyhome] API 수집 실패: %s", str(e))
 
@@ -133,11 +149,6 @@ async def crawl_and_post(settings: Settings) -> None:
             return
 
         # 텔레그램 포스팅 및 노션 등록
-        calendar_manager = NotionCalendarManager(
-            api_key=settings.notion.access_token,
-            database_id=settings.notion.database_id,
-            calendar_share_url=settings.notion.calendar_share_url,
-        )
         repo = AnnouncementRepository(session)
 
         for announcement in new_announcements:

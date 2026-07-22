@@ -105,6 +105,42 @@ class NotionCalendarManager:
         return self.calendar_share_url
 
     @with_retry
+    def get_existing_source_ids(self) -> set[str]:
+        """노션 DB에 이미 등록된 공고의 출처ID 목록을 가져온다.
+
+        Returns:
+            "source_site:source_id" 형태의 문자열 집합.
+        """
+        existing_ids: set[str] = set()
+        has_more = True
+        start_cursor = None
+
+        while has_more:
+            kwargs: dict = {
+                "data_source_id": self.database_id,
+                "page_size": 100,
+                "filter_properties": ["QlMo"],  # 출처ID 속성만 가져오기
+            }
+            if start_cursor:
+                kwargs["start_cursor"] = start_cursor
+
+            response = self.client.data_sources.query(**kwargs)
+
+            for page in response.get("results", []):
+                props = page.get("properties", {})
+                source_id_prop = props.get("출처ID", {}).get("rich_text", [])
+                if source_id_prop:
+                    source_id_text = source_id_prop[0].get("plain_text", "")
+                    if source_id_text:
+                        existing_ids.add(source_id_text)
+
+            has_more = response.get("has_more", False)
+            start_cursor = response.get("next_cursor")
+
+        logger.info("노션 DB 기존 공고 수: %d건", len(existing_ids))
+        return existing_ids
+
+    @with_retry
     def create_page(self, announcement: Announcement) -> str:
         """공고 정보를 노션 DB에 페이지로 생성한다.
 
@@ -298,6 +334,7 @@ class NotionCalendarManager:
         properties: dict[str, Any] = {
             "공고명": {"title": [{"text": {"content": announcement.title}}]},
             "상태": {"select": {"name": status}},
+            "출처ID": {"rich_text": [{"text": {"content": f"{announcement.source_site}:{announcement.source_id}"}}]},
         }
 
         if announcement.announcement_category:

@@ -165,8 +165,8 @@ class TestCrawlAndPost:
 
         await crawl_and_post(mock_settings)
 
-        # CalendarManager가 생성되지 않아야 함
-        mock_calendar_cls.assert_not_called()
+        # CalendarManager가 중복 체크를 위해 호출됨
+        mock_calendar_cls.assert_called_once()
         mock_session.commit.assert_called_once()
         mock_session.close.assert_called_once()
 
