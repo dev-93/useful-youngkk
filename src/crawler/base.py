@@ -18,8 +18,8 @@ logger = logging.getLogger(__name__)
 
 
 # 재시도 설정 상수
-RETRY_INTERVAL_SECONDS = 30 * 60  # 30분
-MAX_RETRIES = 3
+RETRY_INTERVAL_SECONDS = 30  # 30초 (GitHub Actions 환경 고려)
+MAX_RETRIES = 2  # 최대 2회 재시도
 
 
 @dataclass
