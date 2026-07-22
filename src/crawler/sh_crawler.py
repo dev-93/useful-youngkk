@@ -60,19 +60,23 @@ class SHCrawler(BaseCrawler):
     def parse_list(self, html: str) -> list[ListItem]:
         """목록 페이지 HTML에서 공고 항목을 파싱한다.
 
-        SH공사 게시판은 테이블 형태로 공고 목록을 제공한다.
-        각 행에서 제목, 링크(source_id 포함)를 추출한다.
+        SH공사 게시판은 두 번째 테이블에 공고 목록을 제공한다.
+        각 행의 onclick에서 seq(source_id)를 추출한다.
         """
         soup = BeautifulSoup(html, "html.parser")
         items: list[ListItem] = []
 
-        # 게시판 테이블의 각 행을 탐색
-        rows = soup.select("table tbody tr")
-        if not rows:
-            # 대체 패턴: div 기반 목록
-            rows = soup.select(".board_list .list_item, .bbs_list tbody tr")
+        # 데이터 테이블은 두 번째 table (첫 번째는 검색 폼)
+        tables = soup.select("table")
+        if len(tables) < 2:
+            logger.warning("[SH] 데이터 테이블을 찾을 수 없음")
+            return items
 
-        for row in rows:
+        data_table = tables[1]
+        rows = data_table.select("tr")
+
+        # 첫 번째 행은 헤더(th), 나머지가 데이터
+        for row in rows[1:]:
             try:
                 item = self._parse_list_row(row)
                 if item:
@@ -85,8 +89,13 @@ class SHCrawler(BaseCrawler):
 
     def _parse_list_row(self, row) -> ListItem | None:
         """테이블 행에서 ListItem을 추출한다."""
-        # 제목 링크 찾기
-        link = row.select_one("a[href]")
+        cells = row.select("td")
+        if len(cells) < 5:
+            return None
+
+        # 구조: 번호 | 제목 | 담당부서 | 등록일 | 조회수
+        title_cell = cells[1]
+        link = title_cell.select_one("a")
         if not link:
             return None
 
@@ -94,18 +103,18 @@ class SHCrawler(BaseCrawler):
         if not title:
             return None
 
-        href = link.get("href", "")
-
-        # source_id 추출: URL 파라미터에서 seq 또는 ntt_sn 추출
-        source_id = self._extract_source_id(href)
+        # onclick에서 seq 추출: javascript:getDetailView('307350');
+        onclick = link.get("onclick", "")
+        source_id = self._extract_source_id_from_onclick(onclick)
         if not source_id:
             return None
 
-        # 상세 페이지 URL 구성
-        detail_url = self._build_detail_url(href, source_id)
+        # 상세 URL: list.do → view.do
+        detail_url = f"{SH_BASE_URL}/main/lay2/program/S1T295C297/www/brd/m_247/view.do?seq={source_id}"
 
-        # 추가 정보 추출 (모집유형, 기간 등)
-        extra = self._extract_row_extra(row)
+        # 등록일
+        date_text = cells[3].get_text(strip=True) if len(cells) > 3 else ""
+        extra = {"date": date_text} if date_text else {}
 
         return ListItem(
             source_id=source_id,
@@ -113,6 +122,13 @@ class SHCrawler(BaseCrawler):
             detail_url=detail_url,
             extra=extra,
         )
+
+    def _extract_source_id_from_onclick(self, onclick: str) -> str | None:
+        """onclick 속성에서 seq(source_id)를 추출한다."""
+        match = re.search(r"getDetailView\s*\(\s*['\"]?(\d+)", onclick)
+        if match:
+            return match.group(1)
+        return None
 
     def _extract_source_id(self, href: str) -> str | None:
         """URL에서 공고 고유 ID를 추출한다."""
@@ -165,22 +181,24 @@ class SHCrawler(BaseCrawler):
         return response.text
 
     def parse_detail(self, html: str, item: ListItem) -> AnnouncementData:
-        """상세 페이지 HTML에서 공고 상세 정보를 파싱한다."""
+        """상세 페이지 HTML에서 공고 상세 정보를 파싱한다.
+
+        SH공사 공고는 대부분 PDF 첨부 방식이므로,
+        제목에서 유형을 추출하고 본문에서 가능한 정보만 파싱한다.
+        """
         soup = BeautifulSoup(html, "html.parser")
 
-        # 본문 텍스트 추출
-        content_area = soup.select_one(
-            ".view_cont, .bbs_view, .board_view, .content_view, #content"
-        )
+        # 본문 텍스트 추출 (contents div)
+        content_area = soup.select_one("div.contents")
         body_text = content_area.get_text(separator="\n") if content_area else soup.get_text()
 
-        # 자격요건 추출
+        # 자격요건 추출 (본문에 있으면 추출, 없으면 None)
         eligibility = parse_eligibility(body_text)
 
         # 모집 기간 추출
         start_date, end_date = self._extract_period(soup, body_text)
 
-        # 모집 유형 추출
+        # 모집 유형 (제목에서 추출)
         housing_type = self._extract_housing_type(soup, body_text, item.title)
 
         # 대상 지역 추출
@@ -198,7 +216,7 @@ class SHCrawler(BaseCrawler):
             start_date=start_date,
             end_date=end_date,
             result_date=result_date,
-            target_region=target_region,
+            target_region=target_region or "서울",
             eligibility_age=eligibility.age,
             eligibility_income=eligibility.income,
             eligibility_homeless=eligibility.homeless,
@@ -246,6 +264,8 @@ class SHCrawler(BaseCrawler):
         """모집 유형을 추출한다."""
         housing_types = [
             "행복주택",
+            "청년안심주택",
+            "청년주택",
             "공공임대",
             "국민임대",
             "영구임대",
@@ -254,6 +274,8 @@ class SHCrawler(BaseCrawler):
             "공공분양",
             "신혼희망타운",
             "역세권청년주택",
+            "사회주택",
+            "두레주택",
         ]
         # 제목에서 먼저 찾기
         for housing_type in housing_types:

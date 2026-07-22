@@ -342,20 +342,24 @@ SAMPLE_SH_LIST_HTML = """
 <html>
 <body>
 <table>
-<tbody>
+<tr><th>검색</th><td>검색폼</td></tr>
+</table>
+<table>
+<tr><th>번호</th><th>제목</th><th>담당부서</th><th>등록일</th><th>조회수</th></tr>
 <tr>
-    <td>1</td>
-    <td><a href="/main/lay2/program/S1T295C297/www/brd/m_247/view.do?seq=12345">2024년 행복주택 입주자 모집공고</a></td>
-    <td>2024.06.01</td>
+    <td>100</td>
+    <td><a href="#" onclick="javascript:getDetailView('12345');return false;">2024년 행복주택 입주자 모집공고</a></td>
+    <td>맞춤주택공급부</td>
+    <td>2024-06-01</td>
     <td>100</td>
 </tr>
 <tr>
-    <td>2</td>
-    <td><a href="/main/lay2/program/S1T295C297/www/brd/m_247/view.do?seq=12346">2024년 공공임대 입주자 모집공고</a></td>
-    <td>2024.05.15</td>
+    <td>99</td>
+    <td><a href="#" onclick="javascript:getDetailView('12346');return false;">2024년 공공임대 입주자 모집공고</a></td>
+    <td>매입주택공급부</td>
+    <td>2024-05-15</td>
     <td>200</td>
 </tr>
-</tbody>
 </table>
 </body>
 </html>
@@ -364,7 +368,7 @@ SAMPLE_SH_LIST_HTML = """
 SAMPLE_SH_DETAIL_HTML = """
 <html>
 <body>
-<div class="view_cont">
+<div class="contents">
     <h3>2024년 행복주택 입주자 모집공고</h3>
     <table>
         <tr><th>모집기간</th><td>2024.06.01 ~ 2024.06.30</td></tr>
