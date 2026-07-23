@@ -17,9 +17,8 @@ logger = logging.getLogger(__name__)
 # 공공데이터포털 API
 BASE_URL = "https://api.odcloud.kr/api"
 
-# API 경로
+# API 경로 (APT 분양 제외 — 청년 타겟에 비합리적 가격)
 API_PATHS = {
-    "apt": "/ApplyhomeInfoDetailSvc/v1/getAPTLttotPblancDetail",
     "urbty": "/ApplyhomeInfoDetailSvc/v1/getUrbtyOfctlLttotPblancDetail",
     "public_rent": "/ApplyhomeInfoDetailSvc/v1/getPblPvtRentLttotPblancDetail",
 }
@@ -170,9 +169,7 @@ class ApplyHomeAPIClient:
 
     def _determine_housing_type(self, item: dict, api_type: str) -> str:
         """API 유형과 항목 데이터에서 주택 유형을 결정한다."""
-        if api_type == "apt":
-            return "민간분양 APT"
-        elif api_type == "urbty":
+        if api_type == "urbty":
             house_secd = item.get("HOUSE_SECD_NM", "")
             if "오피스텔" in house_secd:
                 return "오피스텔"

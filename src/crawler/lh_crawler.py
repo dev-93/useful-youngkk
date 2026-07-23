@@ -98,6 +98,12 @@ class LHCrawler(BaseCrawler):
         if "서울" not in region:
             return None
 
+        # 유형 필터 (청년 무관 유형 제외)
+        housing_type = cells[1].get_text(strip=True)
+        excluded_types = {"영구임대", "집주인임대", "가정어린이집"}
+        if housing_type in excluded_types:
+            return None
+
         # 공고명 + 링크 데이터
         title_cell = cells[2]
         link = title_cell.select_one("a.wrtancInfoBtn")
