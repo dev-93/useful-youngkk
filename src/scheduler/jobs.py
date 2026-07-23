@@ -12,7 +12,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from src.calendar.notion_client import NotionCalendarManager
-from src.crawler import ApplyHomeAPIClient, LHCrawler, MyHomeCrawler, SHCrawler, run_with_retry
+from src.crawler import ApplyHomeAPIClient, LHCrawler, SHCrawler, run_with_retry
 from src.db import get_session
 from src.db.repository import AnnouncementRepository
 from src.notifier.admin import (
@@ -51,7 +51,6 @@ async def crawl_and_post(settings: Settings) -> None:
         crawlers = [
             SHCrawler(session),
             LHCrawler(session),
-            MyHomeCrawler(session),
         ]
 
         # 노션 DB에서 기존 공고 ID 가져오기 (중복 방지)

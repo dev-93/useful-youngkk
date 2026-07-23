@@ -316,8 +316,8 @@ class TestSchedulerJobsAdminNotifications:
 
         await crawl_and_post(mock_settings)
 
-        # 3개 크롤러 모두 실패 → 3회 관리자 알림
-        assert mock_notifier.send_admin_notification.call_count == 3
+        # 2개 크롤러 모두 실패 → 2회 관리자 알림
+        assert mock_notifier.send_admin_notification.call_count == 2
 
     @pytest.mark.asyncio
     @patch("src.scheduler.jobs.NotionCalendarManager")
