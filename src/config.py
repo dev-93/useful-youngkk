@@ -73,7 +73,7 @@ def _get_env(key: str, default: str | None = None) -> str:
     value = os.getenv(key, default)
     if value is None:
         raise ValueError(f"필수 환경변수 '{key}'가 설정되지 않았습니다.")
-    return value
+    return value.strip()
 
 
 def load_settings() -> Settings:

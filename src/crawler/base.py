@@ -22,6 +22,20 @@ RETRY_INTERVAL_SECONDS = 30  # 30초 (GitHub Actions 환경 고려)
 MAX_RETRIES = 2  # 최대 2회 재시도
 
 
+def _is_client_error(exc: Exception) -> bool:
+    """4xx HTTP 클라이언트 에러인지 판별한다."""
+    error_str = str(exc)
+    # httpx의 HTTPStatusError에서 4xx 확인
+    if hasattr(exc, "response"):
+        status = getattr(exc.response, "status_code", 0)
+        if 400 <= status < 500:
+            return True
+    # 문자열에서 4xx 패턴 확인
+    if "404" in error_str or "403" in error_str or "401" in error_str:
+        return True
+    return False
+
+
 @dataclass
 class AnnouncementData:
     """크롤링된 공고 데이터 구조체.
@@ -292,6 +306,15 @@ def run_with_retry(
                 max_retries + 1,
                 last_error,
             )
+
+            # 4xx 에러(클라이언트 오류)는 재시도 무의미 → 즉시 중단
+            if _is_client_error(e):
+                logger.warning(
+                    "[%s] 클라이언트 에러(4xx) — 재시도 건너뜀",
+                    crawler.source_site,
+                )
+                break
+
             attempt += 1
 
             if attempt <= max_retries:
