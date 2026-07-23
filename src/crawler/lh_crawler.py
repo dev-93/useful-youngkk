@@ -201,7 +201,7 @@ class LHCrawler(BaseCrawler):
             eligibility_income=eligibility.income,
             eligibility_homeless=eligibility.homeless,
             eligibility_residence=eligibility.residence_period,
-            original_url=f"{LH_DETAIL_URL}?panId={item.source_id}&mi={LH_MENU_ID}",
+            original_url=f"{LH_LIST_URL}?mi={LH_MENU_ID}",
         )
 
     def _extract_result_date(self, body_text: str) -> date | None:
