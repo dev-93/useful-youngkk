@@ -491,26 +491,40 @@ SAMPLE_LH_LIST_HTML = """
 <html>
 <body>
 <table>
-<tbody>
+<tr><th>번호</th><th>유형</th><th>공고명</th><th>지역</th><th>첨부</th><th>게시일</th><th>마감일</th><th>상태</th><th>조회수</th></tr>
 <tr>
     <td>1</td>
-    <td><a href="/LH/contents/CON_02_02_01_view.do?not_sn=20240601">2024년 국민임대주택 입주자 모집공고</a></td>
+    <td>행복주택</td>
+    <td><a href="javascript:" data-id1="20240601" data-id2="03" data-id3="13" data-id4="36" class="wrtancInfoBtn"><span>2024년 행복주택 입주자 모집공고</span></a></td>
+    <td>서울특별시</td>
+    <td></td>
     <td>2024.06.01</td>
+    <td>2024.06.25</td>
+    <td>공고중</td>
     <td>150</td>
 </tr>
 <tr>
     <td>2</td>
-    <td><a href="/LH/contents/CON_02_02_01_view.do?not_sn=20240602">2024년 행복주택 입주자 모집공고 (수도권)</a></td>
+    <td>매입임대</td>
+    <td><a href="javascript:" data-id1="20240602" data-id2="03" data-id3="13" data-id4="36" class="wrtancInfoBtn"><span>2024년 매입임대주택 모집공고</span></a></td>
+    <td>서울특별시</td>
+    <td></td>
     <td>2024.05.20</td>
+    <td>2024.06.15</td>
+    <td>공고중</td>
     <td>300</td>
 </tr>
 <tr>
     <td>3</td>
-    <td><span>공지사항 (링크 없음)</span></td>
+    <td>영구임대</td>
+    <td><a href="javascript:" data-id1="20240603" data-id2="03" data-id3="13" data-id4="36" class="wrtancInfoBtn"><span>경남 영구임대 모집</span></a></td>
+    <td>경상남도</td>
+    <td></td>
     <td>2024.05.10</td>
+    <td>2024.05.30</td>
+    <td>마감</td>
     <td>50</td>
 </tr>
-</tbody>
 </table>
 </body>
 </html>
@@ -519,21 +533,16 @@ SAMPLE_LH_LIST_HTML = """
 SAMPLE_LH_DETAIL_HTML = """
 <html>
 <body>
-<div class="view_cont">
-    <h3>2024년 국민임대주택 입주자 모집공고</h3>
-    <table>
-        <tr><th>모집기간</th><td>2024.06.10 ~ 2024.06.25</td></tr>
-        <tr><th>모집유형</th><td>국민임대</td></tr>
-        <tr><th>공급위치</th><td>경기도 화성시</td></tr>
-    </table>
-    <div class="content">
-        <p>입주자격</p>
-        <p>- 만 19세 이상인 자</p>
-        <p>- 도시근로자 월평균 소득 70% 이하</p>
-        <p>- 무주택 세대구성원</p>
-        <p>- 거주기간 2년 이상</p>
-        <p>당첨자 발표일: 2024.07.10</p>
-    </div>
+<div class="content">
+    <h3>2024년 행복주택 입주자 모집공고</h3>
+    <p>공고상태: 공고중</p>
+    <p>유형: 행복주택</p>
+    <p>입주자격</p>
+    <p>- 만 19세 이상 39세 이하인 청년</p>
+    <p>- 도시근로자 월평균 소득 100% 이하</p>
+    <p>- 무주택 세대구성원</p>
+    <p>- 서울 거주 1년 이상</p>
+    <p>당첨자 발표일: 2024.07.10</p>
 </div>
 </body>
 </html>
@@ -543,8 +552,7 @@ SAMPLE_LH_EMPTY_LIST_HTML = """
 <html>
 <body>
 <table>
-<tbody>
-</tbody>
+<tr><th>번호</th><th>유형</th><th>공고명</th><th>지역</th><th>첨부</th><th>게시일</th><th>마감일</th><th>상태</th><th>조회수</th></tr>
 </table>
 </body>
 </html>
@@ -555,14 +563,16 @@ class TestLHCrawlerParseList:
     """LHCrawler.parse_list() 테스트."""
 
     def test_parse_list_items(self, db_session):
-        """목록 페이지에서 공고 항목을 파싱한다."""
+        """목록 페이지에서 서울 공고만 파싱한다."""
         crawler = LHCrawler(db_session)
         items = crawler.parse_list(SAMPLE_LH_LIST_HTML)
+        # 서울 2건만 (경상남도 제외)
         assert len(items) == 2
         assert items[0].source_id == "20240601"
-        assert items[0].title == "2024년 국민임대주택 입주자 모집공고"
+        assert items[0].title == "2024년 행복주택 입주자 모집공고"
+        assert items[0].extra["housing_type"] == "행복주택"
         assert items[1].source_id == "20240602"
-        assert items[1].title == "2024년 행복주택 입주자 모집공고 (수도권)"
+        assert items[1].extra["housing_type"] == "매입임대"
 
     def test_parse_list_empty_table(self, db_session):
         """빈 테이블이면 빈 리스트를 반환한다."""
@@ -570,46 +580,47 @@ class TestLHCrawlerParseList:
         items = crawler.parse_list(SAMPLE_LH_EMPTY_LIST_HTML)
         assert items == []
 
-    def test_parse_list_skips_rows_without_links(self, db_session):
-        """링크 없는 행은 건너뛴다."""
+    def test_parse_list_skips_non_seoul(self, db_session):
+        """서울 외 지역은 건너뛴다."""
         crawler = LHCrawler(db_session)
         items = crawler.parse_list(SAMPLE_LH_LIST_HTML)
-        # 3번째 행은 링크가 없으므로 2개만 파싱됨
+        # 3번째 행은 경상남도 → 제외, 서울 2건만
         assert len(items) == 2
-
-    def test_source_id_extraction_various_params(self, db_session):
-        """다양한 URL 파라미터에서 source_id를 추출한다."""
-        crawler = LHCrawler(db_session)
-        # nttId 파라미터
-        assert crawler._extract_source_id("?nttId=99999") == "99999"
-        # seq 파라미터
-        assert crawler._extract_source_id("?seq=12345") == "12345"
-        # bbs_sn 파라미터
-        assert crawler._extract_source_id("?bbs_sn=55555") == "55555"
-        # pblancNo 파라미터
-        assert crawler._extract_source_id("?pblancNo=ABC123") == "ABC123"
-        # 파라미터 없는 경우
-        assert crawler._extract_source_id("/some/path") is None
 
 
 class TestLHCrawlerParseDetail:
     """LHCrawler.parse_detail() 테스트."""
 
     def test_parse_detail_full(self, db_session):
-        """상세 페이지에서 모든 정보를 추출한다."""
+        """상세 페이지에서 정보를 추출한다."""
         crawler = LHCrawler(db_session)
         item = ListItem(
             source_id="20240601",
-            title="2024년 국민임대주택 입주자 모집공고",
-            detail_url="https://www.lh.or.kr/LH/contents/CON_02_02_01_view.do?not_sn=20240601",
+            title="2024년 행복주택 입주자 모집공고",
+            detail_url="https://apply.lh.or.kr/lhapply/apply/wt/wrtanc/selectWrtancInfo.do",
+            extra={
+                "pan_id": "20240601",
+                "ccr_cnnt_sys_ds_cd": "03",
+                "upp_ais_tp_cd": "13",
+                "ais_tp_cd": "36",
+                "housing_type": "행복주택",
+                "region": "서울특별시",
+                "start_date": "2024.06.01",
+                "end_date": "2024.06.25",
+                "status": "공고중",
+            },
         )
         data = crawler.parse_detail(SAMPLE_LH_DETAIL_HTML, item)
 
         assert data.source_site == "lh"
         assert data.source_id == "20240601"
-        assert data.title == "2024년 국민임대주택 입주자 모집공고"
-        assert data.housing_type == "국민임대"
-        assert data.start_date == date(2024, 6, 10)
+        assert data.title == "2024년 행복주택 입주자 모집공고"
+        assert data.housing_type == "행복주택"
+        assert data.start_date == date(2024, 6, 1)
+        assert data.end_date == date(2024, 6, 25)
+        assert data.result_date == date(2024, 7, 10)
+        assert data.target_region == "서울특별시"
+        assert data.announcement_category == "공공임대"
         assert data.end_date == date(2024, 6, 25)
         assert data.result_date == date(2024, 7, 10)
         assert data.eligibility_age is not None
@@ -624,8 +635,9 @@ class TestLHCrawlerParseDetail:
             source_id="88888",
             title="최소 공고",
             detail_url="http://example.com/88888",
+            extra={"housing_type": None, "region": "서울특별시", "start_date": "", "end_date": ""},
         )
-        html = "<html><body><div class='view_cont'>간단한 내용</div></body></html>"
+        html = "<html><body><div>간단한 내용</div></body></html>"
         data = crawler.parse_detail(html, item)
 
         assert data.source_site == "lh"
@@ -634,15 +646,16 @@ class TestLHCrawlerParseDetail:
         assert data.start_date is None
         assert data.end_date is None
 
-    def test_parse_detail_housing_type_from_title(self, db_session):
-        """제목에서 모집 유형을 추출한다."""
+    def test_parse_detail_housing_type_from_extra(self, db_session):
+        """extra에서 모집 유형을 가져온다."""
         crawler = LHCrawler(db_session)
         item = ListItem(
             source_id="77777",
             title="2024년 행복주택 모집",
             detail_url="http://example.com/77777",
+            extra={"housing_type": "행복주택", "region": "서울특별시", "start_date": "", "end_date": ""},
         )
-        html = "<html><body><div class='view_cont'>일반 내용</div></body></html>"
+        html = "<html><body><div>일반 내용</div></body></html>"
         data = crawler.parse_detail(html, item)
         assert data.housing_type == "행복주택"
 
@@ -664,9 +677,8 @@ class TestLHCrawlerIntegration:
         detail_response.text = SAMPLE_LH_DETAIL_HTML
         detail_response.raise_for_status = MagicMock()
 
-        mock_client.get = MagicMock(
-            side_effect=[list_response, detail_response, detail_response]
-        )
+        mock_client.get = MagicMock(return_value=list_response)
+        mock_client.post = MagicMock(return_value=detail_response)
 
         crawler = LHCrawler(db_session, client=mock_client)
         count = crawler.run()
@@ -677,7 +689,7 @@ class TestLHCrawlerIntegration:
         assert len(announcements) == 2
 
     def test_run_handles_fetch_error(self, db_session):
-        """HTTP 요청 실패 시 빈 결과를 반환하고 예외를 던진다."""
+        """HTTP 요청 실패 시 예외를 던진다."""
         mock_client = MagicMock()
         mock_client.get = MagicMock(side_effect=httpx.HTTPStatusError(
             "404 Not Found", request=MagicMock(), response=MagicMock()
