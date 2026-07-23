@@ -1,4 +1,4 @@
-name: 크롤링 + 포스팅
+name: 청약 공고 수집 및 알림
 
 on:
   schedule:
@@ -22,7 +22,7 @@ jobs:
       - name: Install dependencies
         run: pip install -e .
 
-      - name: Run crawl + post
+      - name: Run crawl + post + reminder
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}

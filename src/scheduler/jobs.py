@@ -203,6 +203,41 @@ async def crawl_and_post(settings: Settings) -> None:
     finally:
         session.close()
 
+    # 노션 상태 업데이트 + 마감 리마인더 (crawl_and_post 안에서 함께 실행)
+    try:
+        from src.notifier.formatter import escape_markdown_v2
+
+        # 마감일 경과 공고 상태 → "마감"
+        expired_pages = calendar_manager.query_expired_active()
+        updated_count = 0
+        for page in expired_pages:
+            try:
+                calendar_manager.update_status(page["page_id"], "마감")
+                updated_count += 1
+            except Exception as e:
+                logger.error("노션 상태 업데이트 실패: page_id=%s, error=%s", page["page_id"], str(e))
+        if updated_count:
+            logger.info("노션 마감 상태 업데이트: %d건", updated_count)
+
+        # 내일 마감 리마인더
+        tomorrow_deadlines = calendar_manager.query_tomorrow_deadlines()
+        if tomorrow_deadlines:
+            lines = ["⏰ *내일 마감 청약 공고*", ""]
+            for item in tomorrow_deadlines:
+                title = escape_markdown_v2(item["title"])
+                end_date = escape_markdown_v2(item["end_date"] or "")
+                lines.append(f"• *{title}* \\({end_date} 마감\\)")
+                if item.get("url"):
+                    lines.append(f"  🔗 [원문 보기]({item['url']})")
+            lines.append("")
+            lines.append(f"📅 [전체 일정 보기]({settings.notion.calendar_share_url})")
+            message = "\n".join(lines)
+            await notifier.send_channel_message(message)
+            logger.info("마감 리마인더 포스팅: %d건", len(tomorrow_deadlines))
+
+    except Exception as e:
+        logger.error("상태 업데이트/리마인더 실패: %s", str(e))
+
 
 async def weekly_summary_job(settings: Settings) -> None:
     """주간 요약 포스팅 작업.
