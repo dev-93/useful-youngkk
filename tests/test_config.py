@@ -25,6 +25,7 @@ def env_vars():
         "TELEGRAM_ADMIN_CHAT_ID": "123456789",
         "NOTION_ACCESS_TOKEN": "secret_test_key",
         "NOTION_DATABASE_ID": "test-db-id",
+        "NOTION_DATA_SOURCE_ID": "test-ds-id",
         "NOTION_CALENDAR_SHARE_URL": "https://notion.so/test",
         "DATABASE_URL": "sqlite:///test.db",
         "CRAWL_SCHEDULE_HOURS": "11,17",
@@ -72,6 +73,7 @@ class TestLoadSettings:
             "TELEGRAM_ADMIN_CHAT_ID": "123",
             "NOTION_ACCESS_TOKEN": "key",
             "NOTION_DATABASE_ID": "db",
+        "NOTION_DATA_SOURCE_ID": "test-ds-id",
             "NOTION_CALENDAR_SHARE_URL": "url",
         }
         with patch.dict(os.environ, env_without_optional, clear=True):

@@ -44,7 +44,7 @@ def mock_settings() -> Settings:
         ),
         notion=NotionConfig(
             access_token="notion-key",
-            database_id="notion-db-id",
+            database_id="notion-db-id", data_source_id="notion-ds-id",
             calendar_share_url="https://notion.so/calendar",
         ),
         database=DatabaseConfig(url="sqlite:///test.db"),
@@ -273,7 +273,7 @@ class TestSchedulerJobsAdminNotifications:
             ),
             notion=NotionConfig(
                 access_token="notion-key",
-                database_id="notion-db-id",
+                database_id="notion-db-id", data_source_id="notion-ds-id",
                 calendar_share_url="https://notion.so/calendar",
             ),
             database=DatabaseConfig(url="sqlite:///test.db"),

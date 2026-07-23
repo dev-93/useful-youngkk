@@ -28,7 +28,8 @@ class NotionConfig:
     """노션 API 설정."""
 
     access_token: str
-    database_id: str
+    database_id: str  # 원본 database ID (pages.create용)
+    data_source_id: str  # data source ID (data_sources.query용)
     calendar_share_url: str
 
 
@@ -90,6 +91,7 @@ def load_settings() -> Settings:
         notion=NotionConfig(
             access_token=_get_env("NOTION_ACCESS_TOKEN"),
             database_id=_get_env("NOTION_DATABASE_ID"),
+            data_source_id=_get_env("NOTION_DATA_SOURCE_ID"),
             calendar_share_url=_get_env("NOTION_CALENDAR_SHARE_URL"),
         ),
         database=DatabaseConfig(

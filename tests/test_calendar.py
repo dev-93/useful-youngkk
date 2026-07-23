@@ -155,6 +155,7 @@ class TestNotionCalendarManager:
             self.manager = NotionCalendarManager(
                 api_key="test-api-key",
                 database_id="test-db-id",
+                data_source_id="test-ds-id",
                 calendar_share_url="https://notion.so/test-calendar",
             )
         self.manager.client = MagicMock()

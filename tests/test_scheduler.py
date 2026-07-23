@@ -35,6 +35,7 @@ def mock_settings() -> Settings:
         notion=NotionConfig(
             access_token="notion-key",
             database_id="notion-db-id",
+            data_source_id="notion-ds-id",
             calendar_share_url="https://notion.so/calendar",
         ),
         database=DatabaseConfig(url="sqlite:///test.db"),
@@ -109,7 +110,7 @@ class TestCreateScheduler:
                 bot_token="t", channel_id="c", admin_chat_id="a"
             ),
             notion=NotionConfig(
-                access_token="k", database_id="d", calendar_share_url="u"
+                access_token="k", database_id="d", data_source_id="ds", calendar_share_url="u"
             ),
             database=DatabaseConfig(url="sqlite:///test.db"),
             scheduler=SchedulerConfig(

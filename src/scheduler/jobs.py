@@ -58,6 +58,7 @@ async def crawl_and_post(settings: Settings) -> None:
         calendar_manager = NotionCalendarManager(
             api_key=settings.notion.access_token,
             database_id=settings.notion.database_id,
+            data_source_id=settings.notion.data_source_id,
             calendar_share_url=settings.notion.calendar_share_url,
         )
         try:
@@ -256,6 +257,7 @@ async def weekly_summary_job(settings: Settings) -> None:
         calendar_manager = NotionCalendarManager(
             api_key=settings.notion.access_token,
             database_id=settings.notion.database_id,
+            data_source_id=settings.notion.data_source_id,
             calendar_share_url=settings.notion.calendar_share_url,
         )
 
@@ -306,6 +308,7 @@ async def reminder_job(settings: Settings) -> None:
         calendar_manager = NotionCalendarManager(
             api_key=settings.notion.access_token,
             database_id=settings.notion.database_id,
+            data_source_id=settings.notion.data_source_id,
             calendar_share_url=settings.notion.calendar_share_url,
         )
 

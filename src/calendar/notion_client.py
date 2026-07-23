@@ -87,17 +87,19 @@ class NotionCalendarManager:
     """
 
     def __init__(
-        self, api_key: str, database_id: str, calendar_share_url: str
+        self, api_key: str, database_id: str, data_source_id: str, calendar_share_url: str
     ) -> None:
         """NotionCalendarManager를 초기화한다.
 
         Args:
             api_key: 노션 Access Token.
-            database_id: 노션 데이터베이스 ID.
+            database_id: 노션 데이터베이스 ID (pages.create용).
+            data_source_id: 노션 데이터소스 ID (query용).
             calendar_share_url: 노션 캘린더 공유 URL.
         """
         self.client = Client(auth=api_key)
         self.database_id = database_id
+        self.data_source_id = data_source_id
         self.calendar_share_url = calendar_share_url
 
     def get_share_url(self) -> str:
@@ -117,7 +119,7 @@ class NotionCalendarManager:
 
         while has_more:
             kwargs: dict = {
-                "data_source_id": self.database_id,
+                "data_source_id": self.data_source_id,
                 "page_size": 100,
                 "filter_properties": ["QlMo"],  # 출처ID 속성만 가져오기
             }
@@ -223,7 +225,7 @@ class NotionCalendarManager:
         tomorrow = (date.today() + timedelta(days=1)).isoformat()
 
         response = self.client.data_sources.query(
-            data_source_id=self.database_id,
+            data_source_id=self.data_source_id,
             filter={
                 "and": [
                     {"property": "마감일", "date": {"equals": tomorrow}},
@@ -261,7 +263,7 @@ class NotionCalendarManager:
         today = date.today().isoformat()
 
         response = self.client.data_sources.query(
-            data_source_id=self.database_id,
+            data_source_id=self.data_source_id,
             filter={
                 "and": [
                     {"property": "마감일", "date": {"before": today}},
@@ -288,7 +290,7 @@ class NotionCalendarManager:
         sunday = monday + timedelta(days=6)
 
         response = self.client.data_sources.query(
-            data_source_id=self.database_id,
+            data_source_id=self.data_source_id,
             filter={
                 "and": [
                     {"property": "마감일", "date": {"on_or_after": monday.isoformat()}},
