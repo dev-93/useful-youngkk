@@ -152,6 +152,32 @@ async def crawl_and_post(settings: Settings) -> None:
         # 텔레그램 포스팅 및 노션 등록
         repo = AnnouncementRepository(session)
 
+        # Gemini로 자격요건 보충 (누락된 항목이 있는 경우)
+        if settings.gemini_api_key:
+            from src.ai.gemini_client import GeminiClient
+
+            gemini = GeminiClient(api_key=settings.gemini_api_key)
+            for announcement in new_announcements:
+                if not announcement.eligibility_age and not announcement.eligibility_income:
+                    try:
+                        result = gemini.extract_eligibility(
+                            title=announcement.title,
+                            housing_type=announcement.housing_type,
+                            detail_text=None,  # 상세 텍스트는 이미 파싱 단계에서 사용됨
+                            region=announcement.target_region,
+                        )
+                        if result.age:
+                            announcement.eligibility_age = f"{result.age} {'⚠️AI참고' if result.is_general_info else ''}"
+                        if result.income:
+                            announcement.eligibility_income = f"{result.income} {'⚠️AI참고' if result.is_general_info else ''}"
+                        if result.homeless and not announcement.eligibility_homeless:
+                            announcement.eligibility_homeless = f"{result.homeless} {'⚠️AI참고' if result.is_general_info else ''}"
+                        if result.residence and not announcement.eligibility_residence:
+                            announcement.eligibility_residence = f"{result.residence} {'⚠️AI참고' if result.is_general_info else ''}"
+                        logger.info("Gemini 자격요건 보충: %s (confidence=%s)", announcement.title[:30], result.confidence)
+                    except Exception as e:
+                        logger.warning("Gemini 보충 실패: %s", str(e))
+
         for announcement in new_announcements:
             # 텔레그램 포스팅 (내부적으로 재시도 및 관리자 알림 처리됨)
             try:

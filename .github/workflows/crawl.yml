@@ -32,5 +32,6 @@ jobs:
           NOTION_DATA_SOURCE_ID: ${{ secrets.NOTION_DATA_SOURCE_ID }}
           NOTION_CALENDAR_SHARE_URL: ${{ secrets.NOTION_CALENDAR_SHARE_URL }}
           PUBLIC_DATA_API_KEY: ${{ secrets.PUBLIC_DATA_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           DATABASE_URL: sqlite:///./bot.db
         run: python -m src.cli crawl
