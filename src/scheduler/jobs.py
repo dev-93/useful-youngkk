@@ -67,27 +67,29 @@ async def crawl_and_post(settings: Settings) -> None:
             existing_ids = set()
 
         new_announcements = []
+        crawl_summary = {}  # 크롤러별 수집 건수 추적
 
         for crawler in crawlers:
             try:
                 crawl_log = run_with_retry(crawler, retry_interval=30, max_retries=2)
                 if crawl_log.status == "failed":
-                    # 3회 재시도 모두 실패 → 관리자 알림
+                    crawl_summary[crawler.source_site] = "❌ 실패"
                     await notify_crawl_failure(
                         notifier,
                         source_site=crawler.source_site,
                         error=crawl_log.error_message or "알 수 없는 오류",
                     )
-                elif crawl_log.status == "success" and crawl_log.new_count > 0:
-                    # 새로 수집된 공고 가져오기
-                    repo = AnnouncementRepository(session)
-                    active = repo.get_active()
-                    # 노션에 이미 등록된 건 제외
-                    for ann in active:
-                        source_key = f"{ann.source_site}:{ann.source_id}"
-                        if source_key not in existing_ids and ann not in new_announcements:
-                            new_announcements.append(ann)
+                else:
+                    crawl_summary[crawler.source_site] = f"{crawl_log.new_count}건"
+                    if crawl_log.status == "success" and crawl_log.new_count > 0:
+                        repo = AnnouncementRepository(session)
+                        active = repo.get_active()
+                        for ann in active:
+                            source_key = f"{ann.source_site}:{ann.source_id}"
+                            if source_key not in existing_ids and ann not in new_announcements:
+                                new_announcements.append(ann)
             except Exception as e:
+                crawl_summary[crawler.source_site] = "❌ 에러"
                 logger.error("[%s] 크롤링 실패: %s", crawler.source_site, str(e))
                 await notify_crawl_failure(
                     notifier,
@@ -128,8 +130,11 @@ async def crawl_and_post(settings: Settings) -> None:
                         )
                         repo.create(ann)
                         new_announcements.append(ann)
-                logger.info("[applyhome] API 수집 완료: 신규 %d건", len([a for a in new_announcements if a.source_site == "applyhome"]))
+                api_new_count = len([a for a in new_announcements if a.source_site == "applyhome"])
+                crawl_summary["applyhome"] = f"{api_new_count}건"
+                logger.info("[applyhome] API 수집 완료: 신규 %d건", api_new_count)
             except Exception as e:
+                crawl_summary["applyhome"] = "❌ 실패"
                 logger.error("[applyhome] API 수집 실패: %s", str(e))
 
         if not new_announcements:
@@ -228,6 +233,15 @@ async def crawl_and_post(settings: Settings) -> None:
         raise
     finally:
         session.close()
+
+    # 수집 요약 DM 전송
+    summary_parts = [f"{site}: {count}" for site, count in crawl_summary.items()]
+    new_count = len(new_announcements) if new_announcements else 0
+    summary_msg = f"📊 수집 요약 | {' / '.join(summary_parts)} | 신규 포스팅: {new_count}건"
+    try:
+        await notifier.send_admin_notification(summary_msg)
+    except Exception:
+        pass
 
     # 노션 상태 업데이트 + 마감 리마인더 (crawl_and_post 안에서 함께 실행)
     try:

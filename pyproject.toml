@@ -31,3 +31,6 @@ include = ["src*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+markers = [
+    "snapshot: 실제 사이트 접속하여 구조 변경 감지 (느림, 네트워크 필요)",
+]
