@@ -103,6 +103,10 @@ class SHCrawler(BaseCrawler):
         if not title:
             return None
 
+        # 모집공고만 필터 (당첨자 발표, 서류제출, 계약안내 등 제외)
+        if not self._is_recruitment_post(title):
+            return None
+
         # onclick에서 seq 추출: javascript:getDetailView('307350');
         onclick = link.get("onclick", "")
         source_id = self._extract_source_id_from_onclick(onclick)
@@ -129,6 +133,45 @@ class SHCrawler(BaseCrawler):
         if match:
             return match.group(1)
         return None
+
+    def _is_recruitment_post(self, title: str) -> bool:
+        """제목이 실제 모집공고인지 판별한다.
+
+        당첨자 발표, 서류제출 안내, 계약안내 등은 제외한다.
+        """
+        # 제외 키워드
+        exclude_keywords = [
+            "당첨자 발표",
+            "당첨자발표",
+            "서류제출",
+            "서류심사",
+            "계약안내",
+            "계약결과",
+            "입주안내",
+            "입주 안내",
+            "전산작업",
+            "시스템 점검",
+            "이용 안내",
+            "재계약 대상",
+        ]
+        for keyword in exclude_keywords:
+            if keyword in title:
+                return False
+
+        # 포함 키워드 (하나라도 있으면 모집공고)
+        include_keywords = [
+            "모집 공고",
+            "모집공고",
+            "입주자 모집",
+            "입주자모집",
+            "예비입주자",
+        ]
+        for keyword in include_keywords:
+            if keyword in title:
+                return True
+
+        # 포함/제외 모두 해당 안 되면 제외 (모집공고만 통과)
+        return False
 
     def _extract_source_id(self, href: str) -> str | None:
         """URL에서 공고 고유 ID를 추출한다."""
