@@ -110,3 +110,13 @@ class TestLHCrawlerSnapshot:
         items = crawler.parse_list(html)
         for item in items:
             assert len(item.source_id) > 5, f"source_id가 너무 짧음: {item.source_id}"
+
+    def test_items_are_active(self, db_session):
+        """수집된 공고가 진행중 상태인지 확인한다."""
+        crawler = LHCrawler(db_session)
+        html = crawler.fetch_list()
+        items = crawler.parse_list(html)
+        for item in items:
+            status = item.extra.get("status", "")
+            # 공고중 또는 접수중이어야 함 (마감은 제외되어야)
+            assert status in ("공고중", "접수중", ""), f"마감된 공고 포함: {status} - {item.title}"

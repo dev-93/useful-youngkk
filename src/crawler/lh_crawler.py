@@ -104,6 +104,11 @@ class LHCrawler(BaseCrawler):
         if housing_type in excluded_types:
             return None
 
+        # 상태 필터 (마감된 공고 제외)
+        status = cells[7].get_text(strip=True)
+        if status in ("마감", "취소"):
+            return None
+
         # 공고명 + 링크 데이터
         title_cell = cells[2]
         link = title_cell.select_one("a.wrtancInfoBtn")
