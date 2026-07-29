@@ -201,8 +201,8 @@ class HUGCrawler(BaseCrawler):
             result_date=None,
             target_region="서울",
             eligibility_age="제한 없음",
-            eligibility_income=None,
-            eligibility_homeless="무주택세대구성원",
+            eligibility_income="제한 없음",
+            eligibility_homeless="무주택세대구성원 전원",
             eligibility_residence="거주지역 제한 없음",
-            original_url=f"https://kbland.kr/hug",
+            original_url="https://kbland.kr/hug",
         )
