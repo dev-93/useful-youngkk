@@ -17,6 +17,36 @@ from src.db.repository import AnnouncementRepository, CrawlLogRepository
 logger = logging.getLogger(__name__)
 
 
+# 개인 대상이 아닌 공고 제외 키워드 (운영기관, 법인, 사업자 등)
+EXCLUDED_TITLE_KEYWORDS = [
+    "운영기관",
+    "운영법인",
+    "운영자 모집",
+    "사업자 모집",
+    "위탁운영",
+    "사회복지법인",
+    "비영리법인",
+]
+
+
+def is_individual_target(title: str) -> bool:
+    """제목이 개인(청년/신혼부부 등) 대상 공고인지 판별한다.
+
+    운영기관, 법인, 사업자 대상 공고는 제외한다.
+
+    Args:
+        title: 공고 제목.
+
+    Returns:
+        개인 대상이면 True, 기관/법인 대상이면 False.
+    """
+    for keyword in EXCLUDED_TITLE_KEYWORDS:
+        if keyword in title:
+            logger.debug("개인 대상 아님 - 제외: %s (키워드: %s)", title, keyword)
+            return False
+    return True
+
+
 # 재시도 설정 상수
 RETRY_INTERVAL_SECONDS = 30  # 30초 (GitHub Actions 환경 고려)
 MAX_RETRIES = 2  # 최대 2회 재시도

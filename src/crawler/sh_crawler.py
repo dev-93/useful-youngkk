@@ -10,7 +10,7 @@ from datetime import date
 import httpx
 from bs4 import BeautifulSoup
 
-from src.crawler.base import AnnouncementData, BaseCrawler, ListItem
+from src.crawler.base import AnnouncementData, BaseCrawler, ListItem, is_individual_target
 from src.crawler.parser import EligibilityInfo, parse_date, parse_eligibility
 
 logger = logging.getLogger(__name__)
@@ -105,6 +105,10 @@ class SHCrawler(BaseCrawler):
 
         # 모집공고만 필터 (당첨자 발표, 서류제출, 계약안내 등 제외)
         if not self._is_recruitment_post(title):
+            return None
+
+        # 개인 대상이 아닌 공고 제외 (운영기관, 법인 등)
+        if not is_individual_target(title):
             return None
 
         # onclick에서 seq 추출: javascript:getDetailView('307350');

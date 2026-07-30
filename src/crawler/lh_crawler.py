@@ -11,7 +11,7 @@ from datetime import date
 import httpx
 from bs4 import BeautifulSoup
 
-from src.crawler.base import AnnouncementData, BaseCrawler, ListItem
+from src.crawler.base import AnnouncementData, BaseCrawler, ListItem, is_individual_target
 from src.crawler.parser import parse_date, parse_eligibility
 
 logger = logging.getLogger(__name__)
@@ -104,22 +104,24 @@ class LHCrawler(BaseCrawler):
         if housing_type in excluded_types:
             return None
 
+        # 공고명에서 제목 먼저 추출 (키워드 필터용)
+        title_cell = cells[2]
+        link = title_cell.select_one("a.wrtancInfoBtn") or title_cell.select_one("a")
+        if not link:
+            return None
+        title = link.get_text(strip=True)
+        title = re.sub(r"\d+일전$", "", title).strip()
+
+        # 제목 키워드 필터 (개인 대상이 아닌 공고 제외)
+        if not is_individual_target(title):
+            return None
+
         # 상태 필터 (마감된 공고 제외)
         status = cells[7].get_text(strip=True)
         if status in ("마감", "취소"):
             return None
 
-        # 공고명 + 링크 데이터
-        title_cell = cells[2]
-        link = title_cell.select_one("a.wrtancInfoBtn")
-        if not link:
-            link = title_cell.select_one("a")
-        if not link:
-            return None
-
-        title = link.get_text(strip=True)
-        # "N일전" 텍스트 제거
-        title = re.sub(r"\d+일전$", "", title).strip()
+        # 제목은 이미 위에서 추출됨
         if not title:
             return None
 
