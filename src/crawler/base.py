@@ -49,7 +49,7 @@ def is_individual_target(title: str) -> bool:
 
 # 재시도 설정 상수
 RETRY_INTERVAL_SECONDS = 30  # 30초 (GitHub Actions 환경 고려)
-MAX_RETRIES = 2  # 최대 2회 재시도
+MAX_RETRIES = 0  # 재시도 없이 1회만 시도
 
 
 def _is_client_error(exc: Exception) -> bool:

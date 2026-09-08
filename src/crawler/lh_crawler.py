@@ -44,7 +44,12 @@ class LHCrawler(BaseCrawler):
         super().__init__(session)
         self._client = client or httpx.Client(
             timeout=REQUEST_TIMEOUT,
-            headers={"User-Agent": USER_AGENT},
+            headers={
+                "User-Agent": USER_AGENT,
+                "Referer": f"{LH_BASE_URL}/lhapply/main.do",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "ko-KR,ko;q=0.9",
+            },
             follow_redirects=True,
         )
 
@@ -58,6 +63,11 @@ class LHCrawler(BaseCrawler):
         logger.info("[LH] 목록 페이지 요청: %s?mi=%s", LH_LIST_URL, LH_MENU_ID)
         response = self._client.get(LH_LIST_URL, params={"mi": LH_MENU_ID})
         response.raise_for_status()
+        # 소프트 404 감지: 200이지만 에러 페이지 반환하는 경우
+        if "페이지가 삭제" in response.text or "잘못된 경로" in response.text:
+            raise RuntimeError(
+                f"[LH] 소프트 404 — URL이 변경되었을 수 있습니다: {LH_LIST_URL}?mi={LH_MENU_ID}"
+            )
         return response.text
 
     def parse_list(self, html: str) -> list[ListItem]:
