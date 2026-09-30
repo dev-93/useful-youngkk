@@ -16,7 +16,6 @@ from src.config import (
     DatabaseConfig,
     LoggingConfig,
     NotionConfig,
-    SchedulerConfig,
     Settings,
     TelegramConfig,
 )
@@ -44,15 +43,11 @@ def mock_settings() -> Settings:
         ),
         notion=NotionConfig(
             access_token="notion-key",
-            database_id="notion-db-id", data_source_id="notion-ds-id",
+            database_id="notion-db-id",
+            data_source_id="notion-ds-id",
             calendar_share_url="https://notion.so/calendar",
         ),
         database=DatabaseConfig(url="sqlite:///test.db"),
-        scheduler=SchedulerConfig(
-            crawl_hours=[11, 17],
-            weekly_summary_day="mon",
-            weekly_summary_hour=9,
-        ),
         logging=LoggingConfig(level="INFO", log_dir="./logs"),
     )
 
@@ -273,25 +268,23 @@ class TestSchedulerJobsAdminNotifications:
             ),
             notion=NotionConfig(
                 access_token="notion-key",
-                database_id="notion-db-id", data_source_id="notion-ds-id",
+                database_id="notion-db-id",
+                data_source_id="notion-ds-id",
                 calendar_share_url="https://notion.so/calendar",
             ),
             database=DatabaseConfig(url="sqlite:///test.db"),
-            scheduler=SchedulerConfig(
-                crawl_hours=[11, 17],
-                weekly_summary_day="mon",
-                weekly_summary_hour=9,
-            ),
             logging=LoggingConfig(level="INFO", log_dir="./logs"),
         )
 
     @pytest.mark.asyncio
     @patch("src.scheduler.jobs.get_session")
     @patch("src.scheduler.jobs.run_with_retry")
+    @patch("src.scheduler.jobs.NotionCalendarManager")
     @patch("src.scheduler.jobs.create_notifier")
     async def test_crawl_failure_sends_admin_notification(
         self,
         mock_create_notifier: MagicMock,
+        mock_calendar_cls: MagicMock,
         mock_run_with_retry: MagicMock,
         mock_get_session: MagicMock,
         mock_settings: Settings,
@@ -314,39 +307,20 @@ class TestSchedulerJobsAdminNotifications:
         mock_crawl_log.error_message = "Connection refused"
         mock_run_with_retry.return_value = mock_crawl_log
 
+        mock_calendar = MagicMock()
+        mock_calendar.get_existing_source_ids.return_value = set()
+        mock_calendar.query_expired_active.return_value = []
+        mock_calendar.query_tomorrow_deadlines.return_value = []
+        mock_calendar_cls.return_value = mock_calendar
+
         await crawl_and_post(mock_settings)
 
-        # 2개 크롤러 모두 실패 → 2회 관리자 알림
-        assert mock_notifier.send_admin_notification.call_count == 2
-
-    @pytest.mark.asyncio
-    @patch("src.scheduler.jobs.NotionCalendarManager")
-    @patch("src.scheduler.jobs.create_notifier")
-    async def test_weekly_summary_failure_sends_admin_notification(
-        self,
-        mock_create_notifier: MagicMock,
-        mock_calendar_cls: MagicMock,
-        mock_settings: Settings,
-    ) -> None:
-        """주간 요약 작업 실패 시 관리자에게 알림이 전송된다."""
-        from src.scheduler.jobs import weekly_summary_job
-
-        mock_notifier = MagicMock()
-        mock_notifier.send_admin_notification = AsyncMock()
-        mock_notifier.send_channel_message = AsyncMock()
-        mock_create_notifier.return_value = mock_notifier
-
-        # NotionCalendarManager에서 예외 발생
-        mock_calendar_cls.side_effect = Exception("Notion API error")
-
-        with pytest.raises(Exception, match="Notion API error"):
-            await weekly_summary_job(mock_settings)
-
-        # 관리자 알림 전송 확인
-        mock_notifier.send_admin_notification.assert_called_once()
-        message = mock_notifier.send_admin_notification.call_args[0][0]
-        assert "스케줄 작업 실패" in message
-        assert "weekly_summary_job" in message
+        messages = [
+            call.args[0]
+            for call in mock_notifier.send_admin_notification.call_args_list
+        ]
+        failure_messages = [message for message in messages if "크롤링 최종 실패" in message]
+        assert len(failure_messages) == 3
 
     @pytest.mark.asyncio
     @patch("src.scheduler.jobs.get_session")

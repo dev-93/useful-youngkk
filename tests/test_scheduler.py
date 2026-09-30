@@ -1,12 +1,7 @@
-"""스케줄러 모듈 테스트.
-
-jobs.py의 크롤링·포스팅·주간 요약·리마인더 작업과
-main.py의 스케줄러 설정을 검증한다.
-"""
+"""GitHub Actions에서 실행하는 수집 파이프라인 테스트."""
 
 from __future__ import annotations
 
-from datetime import date, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -15,12 +10,10 @@ from src.config import (
     DatabaseConfig,
     LoggingConfig,
     NotionConfig,
-    SchedulerConfig,
     Settings,
     TelegramConfig,
 )
-from src.main import create_scheduler
-from src.scheduler.jobs import crawl_and_post, reminder_job, weekly_summary_job
+from src.scheduler.jobs import crawl_and_post
 
 
 @pytest.fixture
@@ -39,99 +32,8 @@ def mock_settings() -> Settings:
             calendar_share_url="https://notion.so/calendar",
         ),
         database=DatabaseConfig(url="sqlite:///test.db"),
-        scheduler=SchedulerConfig(
-            crawl_hours=[11, 17],
-            weekly_summary_day="mon",
-            weekly_summary_hour=9,
-        ),
         logging=LoggingConfig(level="INFO", log_dir="./logs"),
     )
-
-
-class TestCreateScheduler:
-    """create_scheduler 함수 테스트."""
-
-    def test_scheduler_creates_correct_number_of_jobs(
-        self, mock_settings: Settings
-    ) -> None:
-        """스케줄러에 올바른 수의 작업이 등록되는지 확인한다."""
-        scheduler = create_scheduler(mock_settings)
-        jobs = scheduler.get_jobs()
-
-        # 크롤링 2개(11시, 17시) + 주간 요약 1개 + 리마인더 1개 = 4개
-        assert len(jobs) == 4
-
-    def test_scheduler_crawl_jobs_are_weekday_only(
-        self, mock_settings: Settings
-    ) -> None:
-        """크롤링 작업이 평일(mon-fri)에만 실행되도록 설정되는지 확인한다."""
-        scheduler = create_scheduler(mock_settings)
-        jobs = scheduler.get_jobs()
-
-        crawl_jobs = [j for j in jobs if j.id.startswith("crawl_and_post")]
-        assert len(crawl_jobs) == 2
-
-        for job in crawl_jobs:
-            trigger = job.trigger
-            # CronTrigger의 fields에서 day_of_week 확인
-            day_of_week_field = trigger.fields[4]  # day_of_week is index 4
-            assert str(day_of_week_field) == "mon-fri"
-
-    def test_scheduler_weekly_summary_on_monday(
-        self, mock_settings: Settings
-    ) -> None:
-        """주간 요약이 월요일 9시에 실행되도록 설정되는지 확인한다."""
-        scheduler = create_scheduler(mock_settings)
-        jobs = scheduler.get_jobs()
-
-        weekly_job = next(j for j in jobs if j.id == "weekly_summary")
-        trigger = weekly_job.trigger
-
-        day_of_week_field = trigger.fields[4]
-        hour_field = trigger.fields[5]
-        assert str(day_of_week_field) == "mon"
-        assert str(hour_field) == "9"
-
-    def test_scheduler_reminder_daily(self, mock_settings: Settings) -> None:
-        """리마인더가 매일 9시에 실행되도록 설정되는지 확인한다."""
-        scheduler = create_scheduler(mock_settings)
-        jobs = scheduler.get_jobs()
-
-        reminder = next(j for j in jobs if j.id == "reminder")
-        trigger = reminder.trigger
-
-        hour_field = trigger.fields[5]
-        assert str(hour_field) == "9"
-
-    def test_scheduler_custom_crawl_hours(self) -> None:
-        """사용자 정의 크롤링 시간이 반영되는지 확인한다."""
-        settings = Settings(
-            telegram=TelegramConfig(
-                bot_token="t", channel_id="c", admin_chat_id="a"
-            ),
-            notion=NotionConfig(
-                access_token="k", database_id="d", data_source_id="ds", calendar_share_url="u"
-            ),
-            database=DatabaseConfig(url="sqlite:///test.db"),
-            scheduler=SchedulerConfig(
-                crawl_hours=[9, 13, 18],
-                weekly_summary_day="mon",
-                weekly_summary_hour=9,
-            ),
-            logging=LoggingConfig(level="INFO", log_dir="./logs"),
-        )
-        scheduler = create_scheduler(settings)
-        jobs = scheduler.get_jobs()
-
-        crawl_jobs = [j for j in jobs if j.id.startswith("crawl_and_post")]
-        assert len(crawl_jobs) == 3
-
-        crawl_ids = sorted([j.id for j in crawl_jobs])
-        assert crawl_ids == [
-            "crawl_and_post_09",
-            "crawl_and_post_13",
-            "crawl_and_post_18",
-        ]
 
 
 class TestCrawlAndPost:
@@ -150,13 +52,26 @@ class TestCrawlAndPost:
         mock_get_session: MagicMock,
         mock_settings: Settings,
     ) -> None:
-        """새 공고가 없을 때 포스팅을 건너뛰는지 확인한다."""
+        """새 공고가 없어도 상태 업데이트와 리마인더를 실행한다."""
         mock_session = MagicMock()
         mock_get_session.return_value = mock_session
 
         mock_notifier = MagicMock()
         mock_notifier.send_admin_notification = AsyncMock()
+        mock_notifier.send_channel_message = AsyncMock()
         mock_create_notifier.return_value = mock_notifier
+
+        mock_calendar = MagicMock()
+        mock_calendar.query_expired_active.return_value = [{"page_id": "expired-1"}]
+        mock_calendar.query_tomorrow_deadlines.return_value = [
+            {
+                "page_id": "deadline-1",
+                "title": "내일 마감 공고",
+                "end_date": "2026-10-01",
+                "url": "https://example.com/deadline",
+            }
+        ]
+        mock_calendar_cls.return_value = mock_calendar
 
         # 크롤링 결과: 성공했지만 0건
         mock_crawl_log = MagicMock()
@@ -169,6 +84,10 @@ class TestCrawlAndPost:
         # CalendarManager가 중복 체크를 위해 호출됨
         mock_calendar_cls.assert_called_once()
         mock_session.commit.assert_called_once()
+        mock_calendar.query_expired_active.assert_called_once_with()
+        mock_calendar.update_status.assert_called_once_with("expired-1", "마감")
+        mock_calendar.query_tomorrow_deadlines.assert_called_once_with()
+        mock_notifier.send_channel_message.assert_called_once()
         mock_session.close.assert_called_once()
 
     @pytest.mark.asyncio
@@ -254,87 +173,3 @@ class TestCrawlAndPost:
         await crawl_and_post(mock_settings)
         mock_session.commit.assert_called()
         mock_session.close.assert_called_once()
-
-
-class TestWeeklySummaryJob:
-    """weekly_summary_job 작업 테스트."""
-
-    @pytest.mark.asyncio
-    @patch("src.scheduler.jobs.create_notifier")
-    @patch("src.scheduler.jobs.NotionCalendarManager")
-    async def test_weekly_summary_posts_message(
-        self,
-        mock_calendar_cls: MagicMock,
-        mock_create_notifier: MagicMock,
-        mock_settings: Settings,
-    ) -> None:
-        """주간 요약이 정상적으로 포스팅되는지 확인한다."""
-        mock_notifier = MagicMock()
-        mock_notifier.send_channel_message = AsyncMock(return_value="msg-1")
-        mock_notifier.send_admin_notification = AsyncMock()
-        mock_create_notifier.return_value = mock_notifier
-
-        mock_calendar = MagicMock()
-        mock_calendar.query_weekly_deadlines.return_value = []
-        mock_calendar_cls.return_value = mock_calendar
-
-        await weekly_summary_job(mock_settings)
-
-        mock_calendar.query_weekly_deadlines.assert_called_once()
-        mock_notifier.send_channel_message.assert_called_once()
-
-
-class TestReminderJob:
-    """reminder_job 작업 테스트."""
-
-    @pytest.mark.asyncio
-    @patch("src.scheduler.jobs.create_notifier")
-    @patch("src.scheduler.jobs.NotionCalendarManager")
-    async def test_reminder_job_posts_and_updates(
-        self,
-        mock_calendar_cls: MagicMock,
-        mock_create_notifier: MagicMock,
-        mock_settings: Settings,
-    ) -> None:
-        """리마인더가 포스팅되고 노션 상태가 업데이트되는지 확인한다."""
-        mock_notifier = MagicMock()
-        mock_notifier.send_channel_message = AsyncMock(return_value="msg-1")
-        mock_notifier.send_admin_notification = AsyncMock()
-        mock_create_notifier.return_value = mock_notifier
-
-        mock_calendar = MagicMock()
-        mock_calendar.query_tomorrow_deadlines.return_value = [
-            {"page_id": "p1", "title": "테스트 공고", "end_date": "2026-07-22", "url": "https://example.com"}
-        ]
-        mock_calendar.query_expired_active.return_value = [{"page_id": "p2"}]
-        mock_calendar.update_status.return_value = None
-        mock_calendar_cls.return_value = mock_calendar
-
-        await reminder_job(mock_settings)
-
-        mock_notifier.send_channel_message.assert_called_once()
-        mock_calendar.update_status.assert_called_once_with("p2", "마감")
-
-    @pytest.mark.asyncio
-    @patch("src.scheduler.jobs.create_notifier")
-    @patch("src.scheduler.jobs.NotionCalendarManager")
-    async def test_reminder_job_no_reminders(
-        self,
-        mock_calendar_cls: MagicMock,
-        mock_create_notifier: MagicMock,
-        mock_settings: Settings,
-    ) -> None:
-        """리마인더 대상이 없을 때 포스팅을 건너뛰는지 확인한다."""
-        mock_notifier = MagicMock()
-        mock_notifier.send_channel_message = AsyncMock()
-        mock_notifier.send_admin_notification = AsyncMock()
-        mock_create_notifier.return_value = mock_notifier
-
-        mock_calendar = MagicMock()
-        mock_calendar.query_tomorrow_deadlines.return_value = []
-        mock_calendar.query_expired_active.return_value = []
-        mock_calendar_cls.return_value = mock_calendar
-
-        await reminder_job(mock_settings)
-
-        mock_notifier.send_channel_message.assert_not_called()

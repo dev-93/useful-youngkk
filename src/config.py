@@ -5,7 +5,7 @@
 
 import logging
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 
@@ -41,15 +41,6 @@ class DatabaseConfig:
 
 
 @dataclass(frozen=True)
-class SchedulerConfig:
-    """스케줄러 설정."""
-
-    crawl_hours: list[int] = field(default_factory=lambda: [11, 17])
-    weekly_summary_day: str = "mon"
-    weekly_summary_hour: int = 9
-
-
-@dataclass(frozen=True)
 class LoggingConfig:
     """로깅 설정."""
 
@@ -64,7 +55,6 @@ class Settings:
     telegram: TelegramConfig
     notion: NotionConfig
     database: DatabaseConfig
-    scheduler: SchedulerConfig
     logging: LoggingConfig
     public_data_api_key: str | None = None
     gemini_api_key: str | None = None
@@ -80,9 +70,6 @@ def _get_env(key: str, default: str | None = None) -> str:
 
 def load_settings() -> Settings:
     """환경변수에서 설정을 로드한다."""
-    crawl_hours_str = _get_env("CRAWL_SCHEDULE_HOURS", "11,17")
-    crawl_hours = [int(h.strip()) for h in crawl_hours_str.split(",")]
-
     return Settings(
         telegram=TelegramConfig(
             bot_token=_get_env("TELEGRAM_BOT_TOKEN"),
@@ -97,11 +84,6 @@ def load_settings() -> Settings:
         ),
         database=DatabaseConfig(
             url=_get_env("DATABASE_URL", "sqlite:///data/bot.db"),
-        ),
-        scheduler=SchedulerConfig(
-            crawl_hours=crawl_hours,
-            weekly_summary_day=_get_env("WEEKLY_SUMMARY_DAY", "mon"),
-            weekly_summary_hour=int(_get_env("WEEKLY_SUMMARY_HOUR", "9")),
         ),
         logging=LoggingConfig(
             level=_get_env("LOG_LEVEL", "INFO"),

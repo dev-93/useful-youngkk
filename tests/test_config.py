@@ -28,9 +28,6 @@ def env_vars():
         "NOTION_DATA_SOURCE_ID": "test-ds-id",
         "NOTION_CALENDAR_SHARE_URL": "https://notion.so/test",
         "DATABASE_URL": "sqlite:///test.db",
-        "CRAWL_SCHEDULE_HOURS": "11,17",
-        "WEEKLY_SUMMARY_DAY": "mon",
-        "WEEKLY_SUMMARY_HOUR": "9",
         "LOG_LEVEL": "DEBUG",
         "LOG_DIR": "./test_logs",
     }
@@ -53,9 +50,6 @@ class TestLoadSettings:
         assert settings.notion.database_id == "test-db-id"
         assert settings.notion.calendar_share_url == "https://notion.so/test"
         assert settings.database.url == "sqlite:///test.db"
-        assert settings.scheduler.crawl_hours == [11, 17]
-        assert settings.scheduler.weekly_summary_day == "mon"
-        assert settings.scheduler.weekly_summary_hour == 9
         assert settings.logging.level == "DEBUG"
         assert settings.logging.log_dir == "./test_logs"
 
@@ -73,25 +67,15 @@ class TestLoadSettings:
             "TELEGRAM_ADMIN_CHAT_ID": "123",
             "NOTION_ACCESS_TOKEN": "key",
             "NOTION_DATABASE_ID": "db",
-        "NOTION_DATA_SOURCE_ID": "test-ds-id",
+            "NOTION_DATA_SOURCE_ID": "test-ds-id",
             "NOTION_CALENDAR_SHARE_URL": "url",
         }
         with patch.dict(os.environ, env_without_optional, clear=True):
             settings = load_settings()
 
         assert settings.database.url == "sqlite:///data/bot.db"
-        assert settings.scheduler.crawl_hours == [11, 17]
-        assert settings.scheduler.weekly_summary_day == "mon"
-        assert settings.scheduler.weekly_summary_hour == 9
         assert settings.logging.level == "INFO"
         assert settings.logging.log_dir == "./logs"
-
-    def test_parses_crawl_hours(self, env_vars):
-        """CRAWL_SCHEDULE_HOURS를 정수 리스트로 파싱한다."""
-        with patch.dict(os.environ, {**env_vars, "CRAWL_SCHEDULE_HOURS": "9,12,18"}):
-            settings = load_settings()
-
-        assert settings.scheduler.crawl_hours == [9, 12, 18]
 
 
 class TestSetupLogging:
