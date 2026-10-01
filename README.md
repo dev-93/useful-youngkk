@@ -15,7 +15,7 @@
 
 ## 실행 구조
 
-GitHub Actions의 `.github/workflows/crawl.yml`이 평일 오전 10시, 오전 11시, 오후 5시(KST)에 실행됩니다. 각 실행은 다음 단일 명령으로 수집, 새 공고 게시, 노션 등록, 상태 업데이트, 다음 날 마감 리마인더를 순서대로 처리합니다.
+GitHub Actions의 `.github/workflows/crawl.yml`이 평일 오전 9시(KST)에 한 번 실행됩니다. 각 실행은 다음 단일 명령으로 수집, 새 공고 게시, 노션 등록, 상태 업데이트, 다음 날 마감 리마인더를 순서대로 처리합니다.
 
 ```bash
 python -m src.cli crawl
@@ -24,7 +24,7 @@ python -m src.cli crawl
 새 공고가 없는 실행에서도 노션 마감 상태 업데이트와 다음 날 마감 리마인더는 계속 수행됩니다. 수동 실행은 GitHub Actions의 `workflow_dispatch`로도 가능합니다.
 
 ```text
-GitHub Actions (평일 10:00, 11:00, 17:00 KST)
+GitHub Actions (평일 09:00 KST)
   └─ python -m src.cli crawl
        ├─ SH / LH / HUG / 청약홈 수집
        ├─ 새 공고 텔레그램 게시
