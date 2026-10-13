@@ -7,7 +7,13 @@ import logging
 from typing import TYPE_CHECKING
 
 from src.calendar.notion_client import NotionCalendarManager
-from src.crawler import ApplyHomeAPIClient, HUGCrawler, LHCrawler, SHCrawler, run_with_retry
+from src.crawler import (
+    ApplyHomeAPIClient,
+    HUGCrawler,
+    LHCrawler,
+    SHCrawler,
+    run_with_retry,
+)
 from src.db import get_session
 from src.db.repository import AnnouncementRepository
 from src.notifier.admin import (
@@ -18,6 +24,7 @@ from src.notifier.admin import (
     notify_notion_failure,
     retry_db_operation,
 )
+
 if TYPE_CHECKING:
     from src.config import Settings
 
@@ -79,7 +86,10 @@ async def crawl_and_post(settings: Settings) -> None:
                         active = repo.get_active()
                         for ann in active:
                             source_key = f"{ann.source_site}:{ann.source_id}"
-                            if source_key not in existing_ids and ann not in new_announcements:
+                            if (
+                                source_key not in existing_ids
+                                and ann not in new_announcements
+                            ):
                                 new_announcements.append(ann)
             except Exception as e:
                 crawl_summary[crawler.source_site] = "❌ 에러"
@@ -123,7 +133,9 @@ async def crawl_and_post(settings: Settings) -> None:
                         )
                         repo.create(ann)
                         new_announcements.append(ann)
-                api_new_count = len([a for a in new_announcements if a.source_site == "applyhome"])
+                api_new_count = len(
+                    [a for a in new_announcements if a.source_site == "applyhome"]
+                )
                 crawl_summary["applyhome"] = f"{api_new_count}건"
                 logger.info("[applyhome] API 수집 완료: 신규 %d건", api_new_count)
             except Exception as e:
@@ -142,7 +154,10 @@ async def crawl_and_post(settings: Settings) -> None:
 
             gemini = GeminiClient(api_key=settings.gemini_api_key)
             for announcement in new_announcements:
-                if not announcement.eligibility_age and not announcement.eligibility_income:
+                if (
+                    not announcement.eligibility_age
+                    and not announcement.eligibility_income
+                ):
                     try:
                         result = gemini.extract_eligibility(
                             title=announcement.title,
@@ -158,7 +173,11 @@ async def crawl_and_post(settings: Settings) -> None:
                             announcement.eligibility_homeless = f"{result.homeless} {'⚠️AI참고' if result.is_general_info else ''}"
                         if result.residence and not announcement.eligibility_residence:
                             announcement.eligibility_residence = f"{result.residence} {'⚠️AI참고' if result.is_general_info else ''}"
-                        logger.info("Gemini 자격요건 보충: %s (confidence=%s)", announcement.title[:30], result.confidence)
+                        logger.info(
+                            "Gemini 자격요건 보충: %s (confidence=%s)",
+                            announcement.title[:30],
+                            result.confidence,
+                        )
                     except Exception as e:
                         logger.warning("Gemini 보충 실패: %s", str(e))
 
@@ -204,7 +223,9 @@ async def crawl_and_post(settings: Settings) -> None:
             )
             raise
 
-        logger.info("크롤링→포스팅→노션 파이프라인 완료: %d건 처리", len(new_announcements))
+        logger.info(
+            "크롤링→포스팅→노션 파이프라인 완료: %d건 처리", len(new_announcements)
+        )
 
     except Exception as e:
         session.rollback()
@@ -214,14 +235,20 @@ async def crawl_and_post(settings: Settings) -> None:
     finally:
         session.close()
 
-    # 수집 요약 DM 전송
-    summary_parts = [f"{site}: {count}" for site, count in crawl_summary.items()]
-    new_count = len(new_announcements) if new_announcements else 0
-    summary_msg = f"📊 수집 요약 | {' / '.join(summary_parts)} | 신규 포스팅: {new_count}건"
-    try:
-        await notifier.send_admin_notification(summary_msg)
-    except Exception:
-        pass
+    # 수집 요약 DM 전송 (실패한 수집원이 있을 때만)
+    has_failure = any(str(count).startswith("❌") for count in crawl_summary.values())
+    if has_failure:
+        summary_parts = [f"{site}: {count}" for site, count in crawl_summary.items()]
+        new_count = len(new_announcements) if new_announcements else 0
+        summary_msg = (
+            f"📊 수집 요약 | {' / '.join(summary_parts)} | 신규 포스팅: {new_count}건"
+        )
+        try:
+            await notifier.send_admin_notification(summary_msg)
+        except Exception:
+            pass
+    else:
+        logger.info("수집 요약: 실패 없음, 관리자 알림 생략 (%s)", crawl_summary)
 
     # 노션 상태 업데이트 + 마감 리마인더 (crawl_and_post 안에서 함께 실행)
     try:
@@ -235,7 +262,11 @@ async def crawl_and_post(settings: Settings) -> None:
                 calendar_manager.update_status(page["page_id"], "마감")
                 updated_count += 1
             except Exception as e:
-                logger.error("노션 상태 업데이트 실패: page_id=%s, error=%s", page["page_id"], str(e))
+                logger.error(
+                    "노션 상태 업데이트 실패: page_id=%s, error=%s",
+                    page["page_id"],
+                    str(e),
+                )
         if updated_count:
             logger.info("노션 마감 상태 업데이트: %d건", updated_count)
 
