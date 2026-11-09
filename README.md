@@ -8,14 +8,14 @@
 |------|------|
 | 자동 수집 | SH공사, LH공사, HUG 및 청약홈 API에서 공고 수집 |
 | 채널 포스팅 | 새 공고 발견 시 텔레그램 채널에 자동 게시 |
-| 자격요건 보충 | Gemini API가 설정된 경우 누락된 자격요건 보충 |
+| 자격요건 보충 | 공고 원문을 규칙으로 먼저 파싱하고, 남은 조건은 원문이 확보된 경우에만 Gemini가 해석 |
 | 노션 캘린더 | 새 공고 등록 및 마감된 공고 상태 업데이트 |
 | 마감 리마인더 | 각 수집 실행에서 다음 날 마감 공고를 채널에 안내 |
 | 관리자 알림 | 수집 및 외부 API 처리 실패와 실행 결과 요약을 DM으로 전달 |
 
 ## 실행 구조
 
-GitHub Actions의 `.github/workflows/crawl.yml`이 평일 오전 9시(KST)에 한 번 실행됩니다. 각 실행은 다음 단일 명령으로 수집, 새 공고 게시, 노션 등록, 상태 업데이트, 다음 날 마감 리마인더를 순서대로 처리합니다.
+GitHub Actions의 `.github/workflows/crawl.yml`이 평일 오전 10시(KST)에 한 번 실행됩니다. 각 실행은 다음 단일 명령으로 수집, 새 공고 게시, 노션 등록, 상태 업데이트, 다음 날 마감 리마인더를 순서대로 처리합니다.
 
 ```bash
 python -m src.cli crawl
@@ -24,7 +24,7 @@ python -m src.cli crawl
 새 공고가 없는 실행에서도 노션 마감 상태 업데이트와 다음 날 마감 리마인더는 계속 수행됩니다. 수동 실행은 GitHub Actions의 `workflow_dispatch`로도 가능합니다.
 
 ```text
-GitHub Actions (평일 09:00 KST)
+GitHub Actions (평일 10:00 KST)
   └─ python -m src.cli crawl
        ├─ SH / LH / HUG / 청약홈 수집
        ├─ 새 공고 텔레그램 게시

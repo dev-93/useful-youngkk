@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
 
-EXTRACTION_PROMPT = """아래는 공공주택 청약 공고 텍스트입니다. 이 공고에서 자격요건 정보를 정확히 추출해주세요.
+EXTRACTION_PROMPT = """아래는 청약 모집공고 원문 텍스트입니다. 이 공고에서 자격요건 정보를 정확히 추출해주세요.
 
 반드시 공고 텍스트에 명시된 정보만 추출하세요. 텍스트에 없는 정보는 null로 응답하세요.
 추측하거나 일반 지식으로 채우지 마세요.
@@ -36,25 +36,6 @@ JSON 형식으로만 응답하세요:
 {text}
 """
 
-FALLBACK_PROMPT = """아래 공공주택 청약 공고의 자격요건을 알려주세요.
-공고 상세 텍스트가 없어서 해당 주택 유형의 일반적인 자격요건을 알려주세요.
-
-반드시 JSON 형식으로만 응답하세요:
-{{
-  "age": "나이 조건 또는 null",
-  "income": "소득 기준 또는 null",
-  "homeless": "무주택 요건 또는 null",
-  "residence": "거주 기간 요건 또는 null",
-  "confidence": "low",
-  "is_general_info": true
-}}
-
-공고 제목: {title}
-공고 유형: {housing_type}
-공급 지역: {region}
-"""
-
-
 @dataclass
 class EligibilityResult:
     """Gemini에서 추출한 자격요건 결과."""
@@ -64,7 +45,6 @@ class EligibilityResult:
     homeless: str | None = None
     residence: str | None = None
     confidence: str = "low"
-    is_general_info: bool = False
 
 
 class GeminiClient:
@@ -83,33 +63,47 @@ class GeminiClient:
         title: str,
         housing_type: str | None,
         detail_text: str | None,
-        region: str | None = None,
     ) -> EligibilityResult:
         """공고에서 자격요건을 추출한다.
 
-        detail_text가 있으면 텍스트 기반 추출 (정확도 높음).
-        없으면 일반 지식 기반 보충 (confidence=low 표시).
+        공고 원문 텍스트가 없거나 충분하지 않으면 API를 호출하지 않는다.
 
         Args:
             title: 공고 제목.
             housing_type: 주택 유형.
             detail_text: 공고 상세 페이지 텍스트 (있으면 우선 사용).
-            region: 공급 지역.
 
         Returns:
             추출된 자격요건 결과.
         """
-        if detail_text and len(detail_text.strip()) > 100:
-            return self._extract_from_text(title, housing_type, detail_text)
-        else:
-            return self._fallback_general(title, housing_type, region)
+        if not detail_text or len(detail_text.strip()) < 100:
+            return EligibilityResult()
+        return self._extract_from_text(title, housing_type, detail_text)
 
     def _extract_from_text(
         self, title: str, housing_type: str | None, text: str
     ) -> EligibilityResult:
         """공고 텍스트에서 직접 추출한다."""
-        # 텍스트가 너무 길면 앞부분만 (토큰 절약)
-        truncated_text = text[:3000]
+        # 문서 앞부분에 자격요건이 없을 수 있어 관련 문장 주변을 우선 전달한다.
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        keywords = (
+            "신청자격",
+            "청약자격",
+            "입주자격",
+            "자격요건",
+            "공급대상",
+            "무주택",
+            "소득",
+            "거주지역",
+        )
+        selected: list[str] = []
+        for index, line in enumerate(lines):
+            if any(keyword in line for keyword in keywords):
+                for nearby in lines[max(0, index - 2): index + 4]:
+                    if nearby not in selected:
+                        selected.append(nearby)
+        relevant_text = "\n".join(selected) if selected else text
+        truncated_text = relevant_text[:12000]
 
         prompt = EXTRACTION_PROMPT.format(
             title=title,
@@ -119,22 +113,6 @@ class GeminiClient:
 
         response_text = self._call_gemini(prompt)
         return self._parse_response(response_text)
-
-    def _fallback_general(
-        self, title: str, housing_type: str | None, region: str | None
-    ) -> EligibilityResult:
-        """일반 지식 기반으로 보충한다."""
-        prompt = FALLBACK_PROMPT.format(
-            title=title,
-            housing_type=housing_type or "미정",
-            region=region or "서울",
-        )
-
-        response_text = self._call_gemini(prompt)
-        result = self._parse_response(response_text)
-        result.is_general_info = True
-        result.confidence = "low"
-        return result
 
     def _call_gemini(self, prompt: str) -> str:
         """Gemini API를 호출한다."""
@@ -187,7 +165,6 @@ class GeminiClient:
                 homeless=data.get("homeless") if data.get("homeless") != "null" else None,
                 residence=data.get("residence") if data.get("residence") != "null" else None,
                 confidence=data.get("confidence", "low"),
-                is_general_info=data.get("is_general_info", False),
             )
 
         except (json.JSONDecodeError, KeyError, IndexError) as e:

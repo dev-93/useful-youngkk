@@ -14,6 +14,7 @@ from src.crawler import (
     SHCrawler,
     run_with_retry,
 )
+from src.crawler.parser import parse_eligibility
 from src.db import get_session
 from src.db.repository import AnnouncementRepository
 from src.notifier.admin import (
@@ -112,6 +113,53 @@ async def crawl_and_post(settings: Settings) -> None:
                     if source_key in existing_ids:
                         continue
                     if not repo.exists(data.source_site, data.source_id):
+                        detail_text = api_client.fetch_eligibility_text(data)
+                        if detail_text:
+                            extracted = parse_eligibility(detail_text)
+                            data.eligibility_age = extracted.age
+                            data.eligibility_income = extracted.income
+                            data.eligibility_homeless = extracted.homeless
+                            data.eligibility_residence = extracted.residence_period
+
+                            has_missing_eligibility = any(
+                                not value
+                                for value in (
+                                    data.eligibility_age,
+                                    data.eligibility_income,
+                                    data.eligibility_homeless,
+                                    data.eligibility_residence,
+                                )
+                            )
+                            if settings.gemini_api_key and has_missing_eligibility:
+                                try:
+                                    from src.ai.gemini_client import GeminiClient
+
+                                    result = GeminiClient(
+                                        api_key=settings.gemini_api_key
+                                    ).extract_eligibility(
+                                        title=data.title,
+                                        housing_type=data.housing_type,
+                                        detail_text=detail_text,
+                                    )
+                                    data.eligibility_age = (
+                                        result.age or data.eligibility_age
+                                    )
+                                    data.eligibility_income = (
+                                        result.income or data.eligibility_income
+                                    )
+                                    data.eligibility_homeless = (
+                                        result.homeless or data.eligibility_homeless
+                                    )
+                                    data.eligibility_residence = (
+                                        result.residence or data.eligibility_residence
+                                    )
+                                except Exception as e:
+                                    logger.warning(
+                                        "Gemini 공고문 해석 실패: %s (%s)",
+                                        data.title[:30],
+                                        e,
+                                    )
+
                         from src.db.models import Announcement
 
                         ann = Announcement(
@@ -147,39 +195,6 @@ async def crawl_and_post(settings: Settings) -> None:
 
         # 텔레그램 포스팅 및 노션 등록
         repo = AnnouncementRepository(session)
-
-        # Gemini로 자격요건 보충 (누락된 항목이 있는 경우)
-        if settings.gemini_api_key:
-            from src.ai.gemini_client import GeminiClient
-
-            gemini = GeminiClient(api_key=settings.gemini_api_key)
-            for announcement in new_announcements:
-                if (
-                    not announcement.eligibility_age
-                    and not announcement.eligibility_income
-                ):
-                    try:
-                        result = gemini.extract_eligibility(
-                            title=announcement.title,
-                            housing_type=announcement.housing_type,
-                            detail_text=None,  # 상세 텍스트는 이미 파싱 단계에서 사용됨
-                            region=announcement.target_region,
-                        )
-                        if result.age:
-                            announcement.eligibility_age = f"{result.age} {'⚠️AI참고' if result.is_general_info else ''}"
-                        if result.income:
-                            announcement.eligibility_income = f"{result.income} {'⚠️AI참고' if result.is_general_info else ''}"
-                        if result.homeless and not announcement.eligibility_homeless:
-                            announcement.eligibility_homeless = f"{result.homeless} {'⚠️AI참고' if result.is_general_info else ''}"
-                        if result.residence and not announcement.eligibility_residence:
-                            announcement.eligibility_residence = f"{result.residence} {'⚠️AI참고' if result.is_general_info else ''}"
-                        logger.info(
-                            "Gemini 자격요건 보충: %s (confidence=%s)",
-                            announcement.title[:30],
-                            result.confidence,
-                        )
-                    except Exception as e:
-                        logger.warning("Gemini 보충 실패: %s", str(e))
 
         for announcement in new_announcements:
             # 텔레그램 포스팅 (내부적으로 재시도 및 관리자 알림 처리됨)

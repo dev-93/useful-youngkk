@@ -10,6 +10,7 @@ dependencies = [
     "notion-client>=2.2.1",
     "sqlalchemy>=2.0.30",
     "python-dotenv>=1.0.1",
+    "pypdf>=5.0.0",
 ]
 
 [project.optional-dependencies]

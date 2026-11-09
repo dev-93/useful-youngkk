@@ -18,7 +18,8 @@ _MARKDOWN_V2_SPECIAL_CHARS = r"_*[]()~`>#+-=|{}.!"
 _MISSING_FIELD_TEXT = "정보 없음"
 
 # 누락 안내 문구
-_MISSING_NOTICE = "상세 요건은 공고 원문을 확인해 주세요"
+_MISSING_NOTICE = "누락된 자격요건은 공고 원문에서 확인해 주세요"
+_APPLYHOME_MISSING_NOTICE = "청약홈 API에 자격요건 상세가 없어 공고 원문을 확인해 주세요"
 
 
 def escape_markdown_v2(text: str) -> str:
@@ -86,7 +87,12 @@ def format_eligibility_section(announcement: Announcement) -> str:
     ]
 
     if has_missing:
-        notice = escape_markdown_v2(_MISSING_NOTICE)
+        notice_text = (
+            _APPLYHOME_MISSING_NOTICE
+            if announcement.source_site == "applyhome"
+            else _MISSING_NOTICE
+        )
+        notice = escape_markdown_v2(notice_text)
         lines.append("")
         lines.append(f"ℹ️ _{notice}_")
 
@@ -111,6 +117,8 @@ def format_new_announcement(announcement: Announcement) -> str:
 
     # 공고 카테고리 (공공임대 / 민간분양)
     category = escape_markdown_v2(announcement.announcement_category or "미분류")
+    region = escape_markdown_v2(announcement.target_region or "")
+    region_line = [f"*공급위치:* {region}"] if region else []
 
     # 신청 기간 포맷팅
     start_date = announcement.start_date
@@ -140,6 +148,7 @@ def format_new_announcement(announcement: Announcement) -> str:
         f"*\\[{category}\\]* {housing_type}",
         f"*공고명:* {title}",
         f"*신청기간:* {period}",
+        *region_line,
         "",
         eligibility_section,
         "",
